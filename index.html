@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=6">
+<link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
 
@@ -94,9 +94,6 @@
       <button class="btn btn-primary btn-block" id="btn-invite-login">ログインへ進む</button>
     </div>
 
-    <p class="gate-foot">
-      <button class="linky" id="btn-gate-settings">接続先の設定</button>
-    </p>
   </div>
 </div>
 
@@ -109,12 +106,7 @@
       <span class="topbar-name" id="ui-shelf-name">—</span>
       <span class="topbar-sub" id="ui-shelf-sub"></span>
     </button>
-    <button class="icon-btn" id="btn-settings" aria-label="設定">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>
-      </svg>
-    </button>
+
   </header>
 
   <div id="readonly-note" class="readonly-note hidden"></div>
@@ -170,6 +162,15 @@
       <button class="btn btn-quiet btn-block" id="btn-see-all" style="margin-top:14px">
         すべて見る
       </button>
+    </section>
+
+    <section class="tile tile-board">
+      <p class="eyebrow">Board</p>
+      <h3 class="tile-title">
+        コメント<span class="dot hidden" id="ui-unread-dot"></span>
+      </h3>
+      <p class="board-lede" id="ui-board-lede">まだコメントはありません。</p>
+      <button class="btn btn-quiet btn-block" id="btn-open-board">回覧板をひらく</button>
     </section>
 
     <section class="tile tile-share">
@@ -251,14 +252,60 @@
     </div>
   </main>
 
+  <!-- ---- 設定 ---- -->
+  <main id="view-account" class="hidden">
+    <div class="view-head">
+      <p class="eyebrow">Account</p>
+      <h2>設定</h2>
+    </div>
+
+    <section class="tile tile-wide">
+      <p class="eyebrow">ログイン中</p>
+      <p class="account-line"><b id="ui-my-name">—</b><br><span id="ui-my-email">—</span></p>
+
+      <div class="field" style="margin-top:18px">
+        <label for="in-rename">呼び名を変える</label>
+        <div class="link-box" style="background:none;padding:0;gap:9px">
+          <input type="text" id="in-rename" maxlength="20" style="flex:1">
+          <button class="btn btn-primary" id="btn-rename-me">変える</button>
+        </div>
+        <p class="field-hint">本棚に並ぶときの名前です。</p>
+      </div>
+    </section>
+
+    <section class="tile tile-wide" style="margin-top:14px">
+      <p class="eyebrow">この端末</p>
+      <button class="btn btn-line btn-block" id="btn-logout" style="margin-top:10px">
+        ログアウト
+      </button>
+      <p class="field-hint">
+        記録は残ります。同じメールでログインし直せば元に戻ります。
+      </p>
+    </section>
+
+    <section class="tile tile-wide" style="margin-top:14px">
+      <p class="eyebrow">Danger</p>
+      <button class="btn btn-line btn-danger btn-block" id="btn-delete-open" style="margin-top:10px">
+        アカウントを削除する
+      </button>
+      <p class="field-hint">
+        アカウントと、あなたが書いた記録をすべて消します。元には戻せません。
+      </p>
+    </section>
+  </main>
+
   <!-- ---- はなす ---- -->
   <main id="view-chat" class="hidden">
     <div class="view-head">
-      <p class="eyebrow">Talk</p>
-      <h2>この本棚で話す</h2>
+      <p class="eyebrow">Board</p>
+      <h2 id="ui-board-title">この本棚の回覧板</h2>
     </div>
 
     <div class="chat-log" id="ui-chat-log"></div>
+
+    <div style="margin-top:10px">
+      <button class="btn btn-quiet" id="btn-board-back">本棚に戻る</button>
+    </div>
 
     <div class="chat-compose">
       <div class="quote-chip hidden" id="ui-quote">
@@ -290,9 +337,9 @@
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.6l2.2 5 5.4.5-4.1 3.6 1.2 5.3-4.7-2.8-4.7 2.8 1.2-5.3L2.4 7.1l5.4-.5z"/></svg>
       <span>おすすめ</span>
     </button>
-    <button data-nav="chat" id="btn-nav-chat">
-      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c4.4 0 8 2.9 8 6.5S14.4 15 10 15c-.9 0-1.8-.1-2.6-.4L3 16.5l1.2-3A6.7 6.7 0 0 1 2 8.5C2 4.9 5.6 2 10 2z"/></svg>
-      <span>はなす</span><span class="dot hidden" id="ui-unread-dot"></span>
+    <button data-nav="account">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 1.6c-4 0-7 2.4-7 5.4h14c0-3-3-5.4-7-5.4z"/></svg>
+      <span>設定</span>
     </button>
   </nav>
 
@@ -439,55 +486,6 @@
   </div>
 </div>
 
-<!-- ========== 設定シート ========== -->
-<div id="sheet-settings" class="veil hidden">
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="set-heading">
-    <div class="sheet-grip" aria-hidden="true"></div>
-    <h2 id="set-heading">設定</h2>
-
-    <div id="account-box" class="hidden">
-      <div class="field">
-        <label>ログイン中</label>
-        <p class="account-line"><b id="ui-my-name">—</b><br><span id="ui-my-email">—</span></p>
-      </div>
-      <div class="field">
-        <label for="in-rename">呼び名を変える</label>
-        <div class="link-box" style="background:none;padding:0;gap:9px">
-          <input type="text" id="in-rename" maxlength="20" style="flex:1">
-          <button class="btn btn-primary" id="btn-rename-me">変える</button>
-        </div>
-      </div>
-      <hr class="rule">
-    </div>
-
-    <div class="btn-row">
-      <button class="btn btn-line btn-block" id="btn-set-close">閉じる</button>
-    </div>
-
-    <button class="btn btn-line btn-danger btn-block hidden" id="btn-logout" style="margin-top:22px">
-      ログアウト
-    </button>
-    <p class="field-hint hidden" id="logout-hint">
-      この端末からログアウトします。記録は残るので、同じメールでログインし直せば元に戻ります。
-    </p>
-
-    <div id="danger-zone" class="hidden">
-      <hr class="rule">
-      <p class="eyebrow">Danger</p>
-      <button class="btn btn-line btn-danger btn-block" id="btn-delete-open">
-        アカウントを削除する
-      </button>
-      <p class="field-hint">
-        アカウントと、あなたが書いた記録をすべて消します。元には戻せません。
-      </p>
-    </div>
-  </div>
-</div>
-
-<!--
-  ?v=… はキャッシュ避け。app.js や styles.css を直したら、
-  この数字を上げてから push すること。上げないと、しばらく古いファイルが配られる。
--->
 <!-- ========== アカウント削除 ========== -->
 <div id="sheet-delete" class="veil hidden">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="del-heading">
@@ -496,18 +494,14 @@
 
     <div id="ui-delete-summary"></div>
 
-    <div class="field" style="margin-top:18px">
-      <label for="in-delete-confirm">確認のため「削除」と入力してください</label>
-      <input type="text" id="in-delete-confirm" autocomplete="off" placeholder="削除">
-    </div>
-
-    <div class="btn-row">
+    <div class="btn-row" style="margin-top:20px">
       <button class="btn btn-line" id="btn-delete-cancel">やめる</button>
-      <button class="btn btn-danger-solid" id="btn-delete-go" disabled>完全に削除する</button>
+      <button class="btn btn-danger-solid" id="btn-delete-go">削除する</button>
     </div>
+    <p class="field-hint" id="ui-delete-step">押すともう一度確認します。</p>
   </div>
 </div>
 
-<script src="app.js?v=6"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
