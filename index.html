@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=13">
+<link rel="stylesheet" href="styles.css?v=14">
 <script>
   // CSSより先に色を決めておく。あとから当てると一瞬ちらつくため。
   (function () {
@@ -144,6 +144,9 @@
         <div class="now-count" id="ui-now-count"></div>
       </div>
       <ul class="rec-list now-list" id="ui-now-list"></ul>
+      <button class="btn btn-line btn-block hidden" id="btn-now-clear" style="margin-top:12px">
+        すべて表示にもどす
+      </button>
       <div class="now-empty hidden" id="ui-now-empty">
         まだ今月のしおりは白紙です。<br>読み終えた一冊から挟んでみてください。
       </div>
@@ -153,23 +156,24 @@
     </section>
 
     <section class="tile tile-stats tile-wide">
-      <div class="stat-row">
-        <div class="stat-cell">
+      <div class="stat-row" id="ui-stat-row">
+        <button class="stat-cell" data-kind="book">
           <p class="eyebrow">Books</p>
-          <div class="stat-num" id="ui-book-count">0<span>冊</span></div>
-          <div class="stat-label">本</div>
-        </div>
-        <div class="stat-cell">
+          <span class="stat-num" id="ui-book-count">0<span>冊</span></span>
+          <span class="stat-label">本</span>
+        </button>
+        <button class="stat-cell" data-kind="movie">
           <p class="eyebrow">Films</p>
-          <div class="stat-num" id="ui-movie-count">0<span>本</span></div>
-          <div class="stat-label">映画</div>
-        </div>
-        <div class="stat-cell">
+          <span class="stat-num" id="ui-movie-count">0<span>本</span></span>
+          <span class="stat-label">映画</span>
+        </button>
+        <button class="stat-cell" data-kind="anime">
           <p class="eyebrow">Anime</p>
-          <div class="stat-num" id="ui-anime-count">0<span>作</span></div>
-          <div class="stat-label">アニメ</div>
-        </div>
+          <span class="stat-num" id="ui-anime-count">0<span>作</span></span>
+          <span class="stat-label">アニメ</span>
+        </button>
       </div>
+      <p class="stat-hint">押すと、今月のその種類だけを表示します。</p>
     </section>
 
     <section class="tile tile-ai">
@@ -556,6 +560,6 @@
   </div>
 </div>
 
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>
