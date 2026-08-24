@@ -376,6 +376,7 @@ input, select, textarea { font: inherit; color: inherit; }
 
 .kind-chip {
   flex: none;
+  align-self: flex-start;
   font-size: 10px;
   letter-spacing: .1em;
   padding: 2px 7px;
@@ -634,19 +635,26 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 
 .dock button {
-  flex: none;
+  flex: 1;
+  position: relative;
   white-space: nowrap;
   border: none;
   background: none;
-  border-radius: 30px;
-  padding: 9px 15px;
-  font-size: 12.5px;
-  letter-spacing: .05em;
+  border-radius: 26px;
+  padding: 7px 6px 6px;
+  font-size: 10.5px;
+  letter-spacing: .02em;
   color: var(--mist);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 62px;
 }
 
+.dock button svg { width: 19px; height: 19px; fill: currentColor; }
+
 .dock button.is-on { background: var(--blush); color: var(--rouge-deep); }
-.dock .dock-add { background: var(--rouge); color: var(--paper); padding: 9px 17px; }
 
 /* ============================================================
    シート（モーダル）
@@ -931,4 +939,479 @@ input, select, textarea { font: inherit; color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* ============================================================
+   はなす（本棚のチャット）
+   ========================================================== */
+
+/* 会話が短くても入力欄が下に落ち着くように、画面の高さを使い切る */
+#view-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 210px);
+}
+
+.chat-log {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.chat-day {
+  align-self: center;
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  color: var(--mist);
+  background: var(--paper);
+  padding: 3px 12px;
+  border-radius: 30px;
+  margin: 6px 0 2px;
+}
+
+.msg { display: flex; flex-direction: column; max-width: 82%; }
+
+/* 引用があるときは、題名が窮屈に折り返さないよう幅を確保する */
+.msg.has-ref .msg-bubble { min-width: min(230px, 72vw); }
+.msg.is-mine { align-self: flex-end; align-items: flex-end; }
+
+.msg-who {
+  font-size: 10.5px;
+  color: var(--mist);
+  letter-spacing: .06em;
+  margin: 0 4px 4px;
+}
+
+.msg-bubble {
+  text-align: left;
+  background: var(--paper);
+  border-radius: var(--r-md);
+  padding: 11px 14px;
+  box-shadow: var(--shadow-soft);
+  font-size: 14px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+/* 改行を活かすのは本文だけ。引用部分にかけると組版の改行まで出てしまう */
+.msg-text { display: block; white-space: pre-wrap; }
+
+.msg.is-mine .msg-bubble {
+  background: var(--rouge);
+  color: var(--paper);
+}
+
+.msg-time {
+  font-size: 10px;
+  color: var(--mist);
+  letter-spacing: .04em;
+  margin: 4px 4px 0;
+}
+
+/* 引用された作品 */
+.msg-ref {
+  display: flex;
+  /* baseline だと block の子で高さが間延びするので flex-start にする */
+  align-items: flex-start;
+  text-align: left;
+  gap: 8px;
+  margin: -2px -4px 9px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--blush);
+}
+
+.msg.is-mine .msg-ref { background: rgba(255, 255, 255, .16); }
+
+/* 空いている幅を使って、題名と著者を別の行に落ち着かせる */
+.msg-ref-body { flex: 1; min-width: 0; }
+
+.msg-ref b {
+  display: block;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.msg-ref i {
+  display: block;
+  font-style: normal;
+  font-size: 10.5px;
+  line-height: 1.5;
+  margin-top: 1px;
+  color: var(--mist);
+}
+
+.msg.is-mine .msg-ref i { color: rgba(255, 255, 255, .7); }
+.msg.is-mine .msg-ref .kind-chip { background: rgba(255, 255, 255, .24); color: var(--paper); }
+
+.chat-empty {
+  background: var(--paper);
+  border-radius: var(--r-lg);
+  padding: 34px 24px;
+  text-align: center;
+  box-shadow: var(--shadow-soft);
+  font-size: 13px;
+  color: var(--mist);
+  line-height: 1.95;
+}
+
+/* 入力欄 */
+.chat-compose {
+  position: sticky;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  margin-top: 16px;
+  padding: 10px;
+  border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, .92);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-lift);
+}
+
+.chat-input-row { display: flex; gap: 8px; align-items: flex-end; }
+
+.chat-input-row textarea {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--blush-deep);
+  border-radius: 18px;
+  background: var(--paper-warm);
+  padding: 10px 14px;
+  font-size: 15px;
+  line-height: 1.6;
+  resize: none;
+  max-height: 140px;
+}
+
+.chat-input-row textarea:focus {
+  outline: none;
+  border-color: var(--petal);
+  background: var(--paper);
+}
+
+.chat-send { flex: none; padding: 11px 18px; }
+
+.quote-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 8px 8px 11px;
+  border-radius: var(--r-sm);
+  background: var(--blush);
+}
+
+.quote-body { flex: 1; min-width: 0; }
+
+.quote-body b {
+  display: block;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.quote-body i {
+  display: block;
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--mist);
+}
+
+.quote-x {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--mist);
+  font-size: 17px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.quote-x:hover { color: var(--rouge); }
+
+/* 「話す」ボタン */
+.row-talk {
+  flex: none;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  color: var(--mist);
+  font-size: 11px;
+  letter-spacing: .05em;
+}
+
+.row-talk:hover { color: var(--rouge); }
+
+/* 未読の赤い印 */
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rouge);
+  margin-left: 5px;
+  transform: translateY(-1px);
+}
+
+/* タブの中では右上に重ねる */
+.dock .dot {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  margin: 0;
+  transform: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .9);
+}
+
+.dock button.has-unread { color: var(--rouge-deep); }
+
+.shelf-row .dot { margin-left: 6px; }
+
+/* ============================================================
+   一覧・絞り込み
+   ========================================================== */
+
+.filter-box .field { margin-bottom: 0; }
+
+.filter-box input[type="search"] {
+  width: 100%;
+  border: 1px solid var(--blush-deep);
+  border-radius: var(--r-sm);
+  background: var(--paper-warm);
+  padding: 11px 13px;
+  font-size: 15px;
+  -webkit-appearance: none;
+}
+
+.filter-box input[type="search"]:focus {
+  outline: none;
+  border-color: var(--petal);
+  background: var(--paper);
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.chip {
+  border: 1px solid var(--blush-deep);
+  background: var(--paper-warm);
+  border-radius: 30px;
+  padding: 6px 13px;
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--rouge-deep);
+  transition: background .16s ease, border-color .16s ease;
+}
+
+.chip:hover { background: var(--blush); }
+
+.chip.is-on {
+  background: var(--rouge);
+  border-color: var(--rouge);
+  color: var(--paper);
+}
+
+.filter-count {
+  margin: 14px 0 0;
+  font-size: 11.5px;
+  color: var(--mist);
+  letter-spacing: .06em;
+}
+
+.all-empty {
+  padding: 30px 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--mist);
+  line-height: 1.9;
+}
+
+/* ============================================================
+   メンバーの操作・アカウント削除
+   ========================================================== */
+
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--blush-deep);
+}
+
+.member-row:last-child { border-bottom: none; }
+.member-row b { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+
+.member-tag {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: .08em;
+  padding: 2px 8px;
+  border-radius: 30px;
+  background: var(--blush);
+  color: var(--rouge-deep);
+}
+
+.member-kick {
+  flex: none;
+  border: 1px solid var(--petal);
+  background: none;
+  border-radius: 30px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  color: var(--rouge-deep);
+  letter-spacing: .04em;
+}
+
+.member-kick:hover { background: var(--blush); }
+
+.del-list { list-style: none; margin: 0; padding: 0; }
+
+.del-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--blush-deep);
+  font-size: 13.5px;
+}
+
+.del-list li:last-child { border-bottom: none; }
+.del-list span { color: var(--mist); font-size: 12.5px; }
+.del-list b { font-family: var(--display); font-size: 16px; font-weight: 600; }
+
+.del-warn {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  background: var(--blush);
+  color: var(--rouge-deep);
+  font-size: 12.5px;
+  line-height: 1.85;
+}
+
+.btn-danger { border-color: var(--petal) !important; color: var(--rouge-deep); }
+
+.btn-danger-solid { background: var(--rouge-deep); color: var(--paper); }
+.btn-danger-solid:disabled { background: var(--blush-deep); color: var(--mist); }
+
+.rule { border: none; border-top: 1px solid var(--blush-deep); margin: 22px 0; }
+
+
+/* ============================================================
+   みんなの本棚
+   ========================================================== */
+
+.people-group { margin-bottom: 26px; }
+
+.people-group > .eyebrow { margin-bottom: 10px; }
+
+.shelf-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: var(--paper);
+  border-radius: var(--r-lg);
+  padding: 17px 18px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-soft);
+  transition: transform .16s ease;
+}
+
+.shelf-card:active { transform: scale(.985); }
+
+.shelf-card .mark {
+  flex: none;
+  width: 14px;
+  height: 30px;
+  background: var(--petal);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 6px), 0 100%);
+}
+
+.shelf-card.is-on .mark { background: var(--rouge); }
+
+.shelf-card-body { flex: 1; min-width: 0; }
+
+.shelf-card b {
+  display: block;
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.shelf-card span {
+  display: block;
+  font-size: 11px;
+  color: var(--mist);
+  letter-spacing: .05em;
+  margin-top: 3px;
+}
+
+.role-tag {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: .06em;
+  padding: 3px 9px;
+  border-radius: 30px;
+  background: var(--blush);
+  color: var(--rouge-deep);
+}
+
+/* 権限の切り替え */
+.role-seg { display: flex; gap: 4px; flex: none; }
+
+.role-seg button {
+  border: 1px solid var(--blush-deep);
+  background: var(--paper-warm);
+  border-radius: 30px;
+  padding: 4px 10px;
+  font-size: 10.5px;
+  color: var(--mist);
+  letter-spacing: .02em;
+}
+
+.role-seg button.is-on {
+  background: var(--rouge);
+  border-color: var(--rouge);
+  color: var(--paper);
+}
+
+.member-row.is-stack { flex-wrap: wrap; }
+.member-row.is-stack .role-seg { margin-left: auto; }
+
+/* ホーム画面に追加のご案内 */
+.install-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  background: var(--paper);
+  border-radius: var(--r-md);
+  padding: 13px 15px;
+  margin-bottom: var(--gap);
+  box-shadow: var(--shadow-soft);
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--rouge-deep);
+}
+
+.install-hint p { margin: 0; flex: 1; }
+
+.install-hint .close {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--mist);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
 }
