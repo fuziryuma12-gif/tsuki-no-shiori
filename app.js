@@ -104,6 +104,9 @@ let aiKind = 'both';
 let aiScope = 'all';
 let pendingEmail = '';
 
+/* --- 今月のタイルの絞り込み --- */
+let nowKind = 'all';
+
 /* --- 一覧の絞り込み --- */
 let allKind = 'all';
 let allWho = 'all';
@@ -530,9 +533,10 @@ async function openShelf(shelfId) {
     if (d.unreadAll) unreadByShelf = d.unreadAll;
     unreadByShelf[shelfId] = d.unread || 0;
 
-    // 本棚を移ったら会話も入れ替える
+    // 本棚を移ったら会話も絞り込みも入れ替える
     messages = [];
     lastMsgAt = '';
+    nowKind = 'all';
 
     $('gate').classList.add('hidden');
     $('app').classList.remove('hidden');
@@ -586,22 +590,54 @@ function renderNow() {
   const p = monthParts(m);
   $('ui-now-month').innerHTML = esc(p.month) + '<small>月</small>';
 
-  const list = S.entries.filter((e) => e.month === m);
+  const all = S.entries.filter((e) => e.month === m);
+  // 絞り込んでいる種類の記録が今月ゼロになったら、勝手に全部へ戻す
+  if (nowKind !== 'all' && !all.some((e) => e.kind === nowKind)) nowKind = 'all';
+
+  const list = nowKind === 'all' ? all : all.filter((e) => e.kind === nowKind);
+
   const parts = KINDS
     .map((k) => {
-      const n = list.filter((e) => e.kind === k.id).length;
+      const n = all.filter((e) => e.kind === k.id).length;
       return n ? k.label + n : null;
     })
     .filter(Boolean);
 
-  $('ui-now-count').textContent = parts.length
-    ? p.year + '年 ・ ' + parts.join(' ')
-    : p.year + '年';
+  $('ui-now-count').textContent = nowKind === 'all'
+    ? (parts.length ? p.year + '年 ・ ' + parts.join(' ') : p.year + '年')
+    : `${p.year}年 ・ ${kindOf(nowKind).label}だけ表示中`;
+
+  // 絞り込み中は解除する手がかりを出す
+  $('btn-now-clear').classList.toggle('hidden', nowKind === 'all');
 
   const ul = $('ui-now-list');
   ul.innerHTML = list.map((e) => entryRow(e)).join('');
   ul.classList.toggle('hidden', list.length === 0);
-  $('ui-now-empty').classList.toggle('hidden', list.length > 0);
+
+  const empty = $('ui-now-empty');
+  if (list.length) {
+    empty.classList.add('hidden');
+  } else {
+    empty.innerHTML = nowKind === 'all'
+      ? 'まだ今月のしおりは白紙です。<br>読み終えた一冊から挟んでみてください。'
+      : `今月の${esc(kindOf(nowKind).label)}はまだありません。`;
+    empty.classList.remove('hidden');
+  }
+
+  // 数のタイル側でも、いま選んでいるものを光らせる
+  KINDS.forEach((k) => {
+    const cell = document.querySelector(`.stat-cell[data-kind="${k.id}"]`);
+    if (cell) cell.classList.toggle('is-on', nowKind === k.id);
+  });
+}
+
+/** 数のタイルを押したときの絞り込み。同じものを押すと解除。 */
+function toggleNowKind(kind) {
+  nowKind = (nowKind === kind) ? 'all' : kind;
+  renderNow();
+  // 今月のタイルまで戻して、切り替わったことが見えるようにする
+  const tile = document.querySelector('.tile-now');
+  if (tile) tile.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderCounts() {
@@ -1665,6 +1701,14 @@ function wireUp() {
     renderThemes();
   });
   $('btn-logout').addEventListener('click', logout);
+
+  /* --- 今月の絞り込み --- */
+  $('ui-stat-row').addEventListener('click', (ev) => {
+    const cell = ev.target.closest('.stat-cell[data-kind]');
+    if (!cell) return;
+    toggleNowKind(cell.dataset.kind);
+  });
+  $('btn-now-clear').addEventListener('click', () => toggleNowKind(nowKind));
 
   /* --- 一覧 --- */
   $('btn-see-all').addEventListener('click', openAll);
