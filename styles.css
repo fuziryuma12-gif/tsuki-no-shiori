@@ -1407,6 +1407,9 @@ input, select, textarea { font: inherit; color: inherit; }
 .member-row.is-stack .role-seg { margin-left: auto; }
 
 /* ホーム画面に追加のご案内 */
+/* bento の中に差し込むので、横いっぱいを占めるようにする */
+#view-home .install-hint { grid-column: 1 / -1; }
+
 .install-hint {
   display: flex;
   align-items: flex-start;
@@ -1652,7 +1655,7 @@ input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- 3つ並ぶ数のタイル ---------- */
 
-.stat-row { display: flex; gap: 6px; }
+.stat-row { display: flex; gap: 4px; }
 
 .stat-cell {
   flex: 1;
@@ -1672,4 +1675,36 @@ input, select, textarea { font: inherit; color: inherit; }
 @media (min-width: 720px) {
   .seg-wrap button { flex: 1; }
   .theme-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+/* ============================================================
+   数のタイル（押すと今月を絞り込む）
+   ========================================================== */
+
+.stat-cell {
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--r-md);
+  padding: 10px 8px 9px;
+  transition: background .16s ease, border-color .16s ease, transform .16s ease;
+  text-align: left;
+}
+
+.stat-cell:hover { background: var(--blush); }
+.stat-cell:active { transform: scale(.97); }
+
+.stat-cell.is-on {
+  background: var(--blush);
+  border-color: var(--rouge);
+}
+
+.stat-cell .stat-num,
+.stat-cell .stat-label { display: block; }
+
+.stat-hint {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: var(--mist);
+  letter-spacing: .04em;
+  text-align: center;
 }
