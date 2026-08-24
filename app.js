@@ -5,6 +5,14 @@
 
 'use strict';
 
+/**
+ * 接続先の GAS ウェブアプリ URL。
+ * ここに書いておくと、リンクを開いた人が設定なしでそのまま使える。
+ * 端末の設定画面で入れた値があれば、そちらが優先される。
+ */
+const DEFAULT_API =
+  'https://script.google.com/macros/s/AKfycbxCRKMHQDxGtuXCf-q6YLSQuwGx9z5VR9nJw7wf1lZO2H_UbhimFUd_NETeplzbtv9F/exec';
+
 const LS = {
   api: 'shiori.apiUrl',
   token: 'shiori.token',
@@ -13,7 +21,7 @@ const LS = {
 };
 
 const store = {
-  get api() { return localStorage.getItem(LS.api) || ''; },
+  get api() { return localStorage.getItem(LS.api) || DEFAULT_API; },
   set api(v) { localStorage.setItem(LS.api, v); },
 
   get token() { return localStorage.getItem(LS.token) || ''; },
