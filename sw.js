@@ -8,13 +8,13 @@
      古い一覧を見せてしまうより、つながらないと分かる方がよい。
    ========================================================== */
 
-const CACHE = 'shiori-v9';
+const CACHE = 'shiori-v11';
 
 const SHELL = [
   './',
   './index.html',
-  './styles.css?v=9',
-  './app.js?v=9',
+  './styles.css?v=11',
+  './app.js?v=11',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png'
@@ -72,7 +72,13 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE).then((c) => c.put(req, copy));
           return res;
         })
-        .catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html')))
+        .catch(() => caches.match(req).then((hit) => {
+          if (hit) return hit;
+          // ページの読み込みだけ index.html で代替する。
+          // CSS や JS の代わりに HTML を返すと、画面が崩れて原因も分かりにくくなる。
+          if (req.mode === 'navigate') return caches.match('./index.html');
+          return Response.error();
+        }))
     );
   }
 });
