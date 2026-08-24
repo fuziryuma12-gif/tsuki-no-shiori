@@ -17,7 +17,9 @@ const LS = {
   api: 'shiori.apiUrl',
   token: 'shiori.token',
   shelf: 'shiori.lastShelfId',
-  pending: 'shiori.pendingJoin'
+  pending: 'shiori.pendingJoin',
+  email: 'shiori.lastEmail',
+  hint: 'shiori.installHintClosed'
 };
 
 const store = {
@@ -29,6 +31,9 @@ const store = {
 
   get lastShelf() { return localStorage.getItem(LS.shelf) || ''; },
   set lastShelf(v) { v ? localStorage.setItem(LS.shelf, v) : localStorage.removeItem(LS.shelf); },
+
+  get lastEmail() { return localStorage.getItem(LS.email) || ''; },
+  set lastEmail(v) { v ? localStorage.setItem(LS.email, v) : localStorage.removeItem(LS.email); },
 
   get pendingJoin() {
     try { return JSON.parse(localStorage.getItem(LS.pending) || 'null'); }
@@ -57,6 +62,21 @@ let formRating = 0;
 let aiKind = 'both';
 let aiScope = 'all';
 let pendingEmail = '';
+
+/* --- 一覧の絞り込み --- */
+let allKind = 'all';
+let allWho = 'all';
+let allSort = 'new';
+let allQuery = '';
+let searchTimer = null;
+
+/* --- チャット --- */
+let messages = [];        // いま表示している会話
+let quoted = null;        // 引用中の作品 { type, id, kind, title, creator }
+let lastMsgAt = '';       // 追いかけの基準になる時刻
+let chatTimer = null;     // 会話画面を開いている間の追いかけ
+let unreadTimer = null;   // 赤い印の確認
+let unreadByShelf = {};   // 本棚ごとの未読件数
 
 const $ = (id) => document.getElementById(id);
 const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -184,6 +204,7 @@ async function busy(btn, label, fn) {
 window.addEventListener('DOMContentLoaded', () => {
   wireUp();
   registerServiceWorker();
+  askPersistentStorage();
   boot();
 });
 
@@ -206,10 +227,10 @@ async function boot() {
   const route = parseHash();
 
   if (!store.api) {
-    showGate('email');
-    $('in-api').value = '';
-    openSheet('sheet-settings');
-    toast('最初に GAS のURLを登録してください');
+    // 通常は app.js の DEFAULT_API が入っているので、ここに来るのは設定漏れのとき
+    document.body.innerHTML =
+      '<div style="padding:44px 24px;font-family:sans-serif;line-height:2;color:#33232A">' +
+      'app.js の <code>DEFAULT_API</code> に、GAS のウェブアプリ URL を入れてください。</div>';
     return;
   }
 
@@ -273,6 +294,8 @@ async function afterLogin() {
     : S.shelves[0].shelfId;
 
   await openShelf(target);
+  checkUnread();
+  startUnreadPolling();
 }
 
 function showGate(step) {
@@ -282,7 +305,12 @@ function showGate(step) {
     $('step-' + s).classList.toggle('hidden', s !== step);
   });
   if (step === 'code') setTimeout(() => $('in-code').focus(), 150);
-  if (step === 'email') setTimeout(() => $('in-email').focus(), 150);
+  if (step === 'email') {
+    // 前に使ったアドレスを入れておく（Safariは7日で保存が消えるため、
+    // 入れ直しの手間をできるだけ減らす）
+    if (!$('in-email').value && store.lastEmail) $('in-email').value = store.lastEmail;
+    setTimeout(() => $('in-email').focus(), 150);
+  }
   if (step === 'profile') {
     // 招待から来た人は、これから他人の本棚に入るので自分の本棚は要らない
     const joining = !!store.pendingJoin || S.shelves.length > 0;
@@ -305,6 +333,7 @@ async function sendCode(btn) {
     try {
       await api('requestCode', { email });
       pendingEmail = email;
+      store.lastEmail = email;
       $('ui-sent-to').textContent = email;
       $('in-code').value = '';
       showGate('code');
@@ -360,6 +389,9 @@ async function logout() {
   store.token = '';
   store.lastShelf = '';
   S = { user: null, shelves: [], canEdit: false, shelf: null, members: [], entries: [], recs: [] };
+  stopChatPolling();
+  if (unreadTimer) { clearInterval(unreadTimer); unreadTimer = null; }
+  messages = []; lastMsgAt = ''; unreadByShelf = {}; clearQuote();
   closeAllSheets();
   location.hash = '';
   showGate('email');
@@ -374,6 +406,8 @@ async function openShelf(shelfId) {
   try {
     const d = await api('getShelf', { shelfId, token: store.token });
     S.canEdit = d.canEdit;
+    S.canWrite = d.canWrite !== undefined ? d.canWrite : d.canEdit;
+    S.myRole = d.myRole || null;
     S.shelf = d.shelf;
     S.members = d.members;
     S.entries = d.entries;
@@ -381,10 +415,16 @@ async function openShelf(shelfId) {
     if (d.me) S.user = d.me;
     if (d.shelves && d.shelves.length) S.shelves = d.shelves;
     if (d.canEdit) store.lastShelf = shelfId;
+    unreadByShelf[shelfId] = d.unread || 0;
+
+    // 本棚を移ったら会話も入れ替える
+    messages = [];
+    lastMsgAt = '';
 
     $('gate').classList.add('hidden');
     $('app').classList.remove('hidden');
     renderAll();
+    maybeShowInstallHint();
 
     const r = parseHash();
     if (r.kind === 'month') renderMonthView(r.month);
@@ -401,11 +441,24 @@ function renderAll() {
     ? (S.user ? S.user.displayName + 'として記録中' : '')
     : '読むだけのモード';
 
-  $('readonly-note').classList.toggle('hidden', S.canEdit);
-  $('btn-add').classList.toggle('hidden', !S.canEdit);
-  $('btn-share-open').classList.toggle('hidden', !S.canEdit);
+  // 読むだけの人には、なぜ書けないのかを出す
+  const note = $('readonly-note');
+  if (!S.canEdit) {
+    note.textContent = '共有された本棚を見ています。記録の追加はできません。';
+    note.classList.remove('hidden');
+  } else if (!S.canWrite) {
+    note.textContent = 'この本棚では読むだけです。会話には参加できます。';
+    note.classList.remove('hidden');
+  } else {
+    note.classList.add('hidden');
+  }
+
+  $('btn-add').classList.toggle('hidden', !S.canWrite);
+  $('btn-share-open').classList.toggle('hidden', !(S.shelf && S.shelf.isOwner));
   $('btn-ai-open').classList.toggle('hidden', !S.canEdit);
-  $('btn-shelf-switch').disabled = !S.canEdit;
+  $('btn-nav-chat').classList.toggle('hidden', !S.canEdit);
+  $('btn-nav-people').classList.toggle('hidden', !S.user);
+  $('btn-see-all').classList.toggle('hidden', S.entries.length === 0);
 
   renderNow();
   renderCounts();
@@ -413,6 +466,7 @@ function renderAll() {
   renderMembers();
   renderMonthStrip();
   renderRecs();
+  renderUnread();
 }
 
 function renderNow() {
@@ -466,7 +520,10 @@ function entryRow(e, withMonth) {
       ${e.note ? `<span class="rec-note">${esc(e.note)}</span>` : ''}
     </span>
     ${e.rating ? `<span class="stars">${stars(e.rating)}</span>` : ''}
-    ${S.canEdit && mine ? `<button class="row-edit" data-edit="${esc(e.entryId)}">直す</button>` : ''}
+    ${S.canEdit && S.members.length > 1
+      ? `<button class="row-talk" data-talk='${esc(JSON.stringify({ type: 'entry', id: e.entryId, kind: e.kind, title: e.title, creator: e.creator }))}'>話す</button>`
+      : ''}
+    ${S.canWrite && mine ? `<button class="row-edit" data-edit="${esc(e.entryId)}">直す</button>` : ''}
   </li>`;
 }
 
@@ -528,7 +585,7 @@ function renderRecs() {
     const by = r.by ? ' ・ ' + r.by : '';
     return `<div style="margin-bottom:26px">
       <p class="eyebrow">${esc(when + by)}${idx === 0 ? ' ・ 最新' : ''}</p>
-      <div class="sug-list">${r.items.map(sugCard).join('')}</div>
+      <div class="sug-list">${r.items.map((it) => sugCard(it, r.recId)).join('')}</div>
       <div class="btn-row" style="margin-top:12px">
         <button class="btn btn-paper" data-share-rec="${esc(r.recId)}">この${r.items.length}件をまとめて共有</button>
       </div>
@@ -536,7 +593,7 @@ function renderRecs() {
   }).join('');
 }
 
-function sugCard(it) {
+function sugCard(it, recId) {
   return `<article class="sug">
     <div class="sug-head">
       <span class="kind-chip${it.kind === 'movie' ? ' is-movie' : ''}">${it.kind === 'movie' ? '映画' : '本'}</span>
@@ -547,8 +604,13 @@ function sugCard(it) {
     </div>
     <p class="sug-reason">${esc(it.reason)}</p>
     <span class="sug-mood">${esc(it.mood || '')}</span>
-    <button class="btn btn-line btn-block" style="margin-top:12px"
-      data-share-one='${esc(JSON.stringify({ t: it.title, c: it.creator, r: it.reason }))}'>共有する</button>
+    <div class="btn-row" style="margin-top:12px">
+      ${S.canEdit && S.members.length > 1
+        ? `<button class="btn btn-line" data-talk='${esc(JSON.stringify({ type: 'rec', id: recId, kind: it.kind, title: it.title, creator: it.creator }))}'>これについて話す</button>`
+        : ''}
+      <button class="btn btn-line"
+        data-share-one='${esc(JSON.stringify({ t: it.title, c: it.creator, r: it.reason }))}'>共有する</button>
+    </div>
   </article>`;
 }
 
@@ -560,18 +622,380 @@ async function shareText(title, text) {
   await copyText(text);
 }
 
+
+/* ============================================================
+   はなす（本棚のチャット）
+   ============================================================
+   会話は本棚ごとに1本。作品を引用したメッセージは、
+   引用時点の題名を写し取ってあるので、元の記録が消えても読める。
+   ========================================================== */
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function fmtDay(iso) {
+  const d = new Date(iso);
+  const today = new Date();
+  const y = new Date(today.getTime() - 864e5);
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  if (same(d, today)) return '今日';
+  if (same(d, y)) return 'きのう';
+  return (d.getFullYear() === today.getFullYear() ? '' : d.getFullYear() + '年 ') +
+         (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+
+function renderChat() {
+  const box = $('ui-chat-log');
+  if (!messages.length) {
+    box.innerHTML = `<div class="chat-empty">
+      まだ会話はありません。<br>
+      記録やおすすめの「話す」から、作品を引用して始められます。
+    </div>`;
+    return;
+  }
+
+  let lastDay = '';
+  box.innerHTML = messages.map((m) => {
+    const mine = S.user && m.userId === S.user.userId;
+    const day = fmtDay(m.createdAt);
+    const sep = day !== lastDay ? `<div class="chat-day">${esc(day)}</div>` : '';
+    lastDay = day;
+
+    // 吹き出しは本文だけ改行を活かすので、引用部分は1行に詰めて書く
+    const ref = m.ref
+      ? `<span class="msg-ref">` +
+        `<span class="kind-chip${m.ref.kind === 'movie' ? ' is-movie' : ''}">${m.ref.kind === 'movie' ? '映画' : '本'}</span>` +
+        `<span class="msg-ref-body"><b>${esc(m.ref.title)}</b>` +
+        (m.ref.creator ? `<i>${esc(m.ref.creator)}</i>` : '') +
+        `</span></span>`
+      : '';
+
+    return `${sep}<div class="msg${mine ? ' is-mine' : ''}${m.ref ? ' has-ref' : ''}">
+      ${mine ? '' : `<span class="msg-who">${esc(m.byName)}</span>`}
+      <span class="msg-bubble">${ref}<span class="msg-text">${esc(m.body)}</span></span>
+      <span class="msg-time">${esc(fmtTime(m.createdAt))}</span>
+    </div>`;
+  }).join('');
+}
+
+function scrollChatToEnd(smooth) {
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: document.body.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+  });
+}
+
+/** 会話を取り込む。after があれば差分だけ足す。 */
+function mergeMessages(list) {
+  if (!list || !list.length) return false;
+  const seen = {};
+  messages.forEach((m) => { seen[m.msgId] = true; });
+  let added = 0;
+  list.forEach((m) => {
+    if (seen[m.msgId]) return;
+    messages.push(m); added++;
+  });
+  if (!added) return false;
+  messages.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  lastMsgAt = messages[messages.length - 1].createdAt;
+  return true;
+}
+
+async function openChat() {
+  showView('chat');
+  if (!messages.length) {
+    $('ui-chat-log').innerHTML = '<div class="spinner"></div>';
+  }
+  await pullMessages(true);
+  startChatPolling();
+  markChatRead();
+  setTimeout(() => $('in-chat').focus(), 120);
+}
+
+async function pullMessages(full) {
+  try {
+    const d = await authed('getMessages', {
+      shelfId: S.shelf.shelfId,
+      after: full ? '' : lastMsgAt
+    });
+    if (full) { messages = []; lastMsgAt = ''; }
+    const changed = mergeMessages(d.messages);
+    if (full || changed) {
+      renderChat();
+      if (full) scrollChatToEnd(false);
+      else scrollChatToEnd(true);
+    }
+    if (changed && !full) markChatRead();
+  } catch (err) {
+    if (full) {
+      $('ui-chat-log').innerHTML =
+        `<div class="chat-empty">${esc(err.message)}</div>`;
+    }
+    // 追いかけの失敗は黙って見送る。次の周期で取り直す。
+  }
+}
+
+/**
+ * 会話画面を見ている間だけ、10秒ごとに新しい発言を取りに行く。
+ * 画面が隠れたら止める（GASの実行時間を無駄に使わないため）。
+ */
+function startChatPolling() {
+  stopChatPolling();
+  chatTimer = setInterval(() => {
+    if (document.hidden) return;
+    if ($('view-chat').classList.contains('hidden')) { stopChatPolling(); return; }
+    pullMessages(false);
+  }, 10000);
+}
+
+function stopChatPolling() {
+  if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
+}
+
+async function sendMessage(btn) {
+  const text = $('in-chat').value.trim();
+  if (!text) { $('in-chat').focus(); return; }
+
+  await busy(btn, '…', async () => {
+    try {
+      const d = await authed('postMessage', {
+        shelfId: S.shelf.shelfId,
+        body: text,
+        ref: quoted || undefined
+      });
+      $('in-chat').value = '';
+      autoGrow($('in-chat'));
+      clearQuote();
+      mergeMessages([d.message]);
+      renderChat();
+      scrollChatToEnd(true);
+      unreadByShelf[S.shelf.shelfId] = 0;
+      renderUnread();
+    } catch (err) { toast(err.message); }
+  });
+}
+
+async function markChatRead() {
+  if (!lastMsgAt) return;
+  unreadByShelf[S.shelf.shelfId] = 0;
+  renderUnread();
+  try { await authed('markRead', { shelfId: S.shelf.shelfId, at: lastMsgAt }); }
+  catch (err) { /* 次に開いたときに直る */ }
+}
+
+/* ---------- 引用 ---------- */
+
+function setQuote(ref) {
+  quoted = ref;
+  $('ui-quote').classList.remove('hidden');
+  $('ui-quote-kind').textContent = ref.kind === 'movie' ? '映画' : '本';
+  $('ui-quote-kind').classList.toggle('is-movie', ref.kind === 'movie');
+  $('ui-quote-title').textContent = ref.title;
+  $('ui-quote-creator').textContent = ref.creator || '';
+}
+
+function clearQuote() {
+  quoted = null;
+  $('ui-quote').classList.add('hidden');
+}
+
+async function talkAbout(ref) {
+  setQuote(ref);
+  await openChat();
+  scrollChatToEnd(false);
+  $('in-chat').focus();
+}
+
+/* ---------- 未読の赤い印 ---------- */
+
+function renderUnread() {
+  const n = unreadByShelf[S.shelf?.shelfId] || 0;
+  $('ui-unread-dot').classList.toggle('hidden', n === 0);
+  $('btn-nav-chat').classList.toggle('has-unread', n > 0);
+
+  // 他の本棚に未読があれば、切り替えボタンにも印を出す
+  const other = Object.keys(unreadByShelf)
+    .filter((k) => k !== S.shelf?.shelfId)
+    .reduce((a, k) => a + (unreadByShelf[k] || 0), 0);
+  const name = $('ui-shelf-name');
+  const existing = name.querySelector('.dot');
+  if (other > 0 && !existing) {
+    const d = document.createElement('span');
+    d.className = 'dot';
+    name.appendChild(d);
+  } else if (other === 0 && existing) {
+    existing.remove();
+  }
+}
+
+/** 赤い印だけを軽く確認する。会話画面を見ていないときの巡回。 */
+async function checkUnread() {
+  if (!S.canEdit || !S.user) return;
+  try {
+    const d = await authed('checkUnread', {});
+    unreadByShelf = d.unread || {};
+    renderUnread();
+  } catch (err) { /* 黙って見送る */ }
+}
+
+function startUnreadPolling() {
+  if (unreadTimer) clearInterval(unreadTimer);
+  unreadTimer = setInterval(() => {
+    if (document.hidden) return;
+    if (!$('view-chat').classList.contains('hidden')) return; // 会話中は不要
+    checkUnread();
+  }, 60000);
+}
+
+/** 入力欄を中身に合わせて伸ばす。 */
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+
+
+/* ============================================================
+   一覧（この本棚のすべて）
+   ============================================================
+   記録が増えると「最近の6件」だけでは足りなくなるので、
+   絞り込みと並べ替えでたどれるようにする。
+   ========================================================== */
+
+function openAll() {
+  renderWhoChips();
+  renderAllList();
+  showView('all');
+}
+
+/** 記録した人での絞り込み。ひとりの本棚では出さない。 */
+function renderWhoChips() {
+  const box = $('filter-who');
+  if (S.members.length < 2) { box.innerHTML = ''; return; }
+  box.innerHTML = '<button class="chip' + (allWho === 'all' ? ' is-on' : '') + '" data-who="all">みんな</button>' +
+    S.members.map((m) =>
+      `<button class="chip${allWho === m.userId ? ' is-on' : ''}" data-who="${esc(m.userId)}">${esc(m.displayName)}</button>`
+    ).join('');
+}
+
+function filteredEntries() {
+  const q = allQuery.trim().toLowerCase();
+  let list = S.entries.slice();
+
+  if (allKind !== 'all') list = list.filter((e) => e.kind === allKind);
+  if (allWho !== 'all') list = list.filter((e) => e.userId === allWho);
+  if (q) {
+    list = list.filter((e) =>
+      (e.title + ' ' + e.creator + ' ' + e.note + ' ' + (e.tags || []).join(' '))
+        .toLowerCase().includes(q)
+    );
+  }
+
+  if (allSort === 'old') {
+    list.sort((a, b) => (a.month === b.month
+      ? (a.createdAt < b.createdAt ? -1 : 1)
+      : (a.month < b.month ? -1 : 1)));
+  } else if (allSort === 'rating') {
+    list.sort((a, b) => (b.rating - a.rating) || (a.month < b.month ? 1 : -1));
+  } else if (allSort === 'title') {
+    list.sort((a, b) => a.title.localeCompare(b.title, 'ja'));
+  }
+  // 'new' は S.entries が既に新しい順なのでそのまま
+
+  return list;
+}
+
+function renderAllList() {
+  const list = filteredEntries();
+  const books = list.filter((e) => e.kind === 'book').length;
+  const films = list.length - books;
+
+  $('ui-all-count').textContent = list.length
+    ? `${list.length}件（本${books} ・ 映画${films}）／ 全${S.entries.length}件`
+    : `全${S.entries.length}件のうち、条件に合うものはありません`;
+
+  $('ui-all-list').innerHTML = list.length
+    ? list.map((e) => entryRow(e, true)).join('')
+    : '<li class="all-empty">見つかりませんでした。<br>言葉を変えるか、絞り込みを外してみてください。</li>';
+}
+
+
+/* ============================================================
+   みんなの本棚
+   ============================================================
+   招待でつながった本棚だけが並ぶ。
+   自分がつくったものと、招かれたものを分けて見せる。
+   ========================================================== */
+
+function roleLabel(role) {
+  return role === 'owner' ? 'つくった人'
+       : role === 'viewer' ? '見るだけ'
+       : '書き込みOK';
+}
+
+function shelfCard(s) {
+  const on = S.shelf && s.shelfId === S.shelf.shelfId;
+  const sub = [
+    s.entryCount + '件',
+    s.memberCount > 1 ? s.memberCount + '人' : null,
+    s.isMine ? null : (s.ownerName ? s.ownerName + 'の本棚' : null),
+    s.isPublic ? '公開中' : null
+  ].filter(Boolean).join(' ・ ');
+
+  return `<button class="shelf-card${on ? ' is-on' : ''}" data-shelf="${esc(s.shelfId)}">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="shelf-card-body">
+      <b>${esc(s.name)}</b>
+      <span>${esc(sub)}</span>
+    </span>
+    ${s.isMine ? '' : `<span class="role-tag">${esc(roleLabel(s.role))}</span>`}
+  </button>`;
+}
+
+function renderPeople() {
+  const mine = S.shelves.filter((s) => s.isMine);
+  const others = S.shelves.filter((s) => !s.isMine);
+
+  let html = '';
+
+  if (others.length) {
+    html += '<div class="people-group"><p class="eyebrow">招かれた本棚</p>' +
+      others.map(shelfCard).join('') + '</div>';
+  } else {
+    html += `<div class="blank" style="margin-bottom:26px">
+      <p>まだ誰ともつながっていません。<br>
+      友人に招待リンクをもらうと、その人の本棚がここに並びます。</p>
+    </div>`;
+  }
+
+  html += '<div class="people-group"><p class="eyebrow">自分の本棚</p>' +
+    mine.map(shelfCard).join('') +
+    `<div class="field" style="margin-top:14px">
+       <label for="in-new-shelf2">新しい本棚をつくる</label>
+       <input type="text" id="in-new-shelf2" maxlength="40" placeholder="2027年の記録">
+     </div>
+     <button class="btn btn-quiet btn-block" id="btn-new-shelf2">つくる</button>
+     </div>`;
+
+  $('ui-people-body').innerHTML = html;
+
+  const btn = $('btn-new-shelf2');
+  if (btn) btn.addEventListener('click', (ev) => createNewShelf(ev.currentTarget, 'in-new-shelf2'));
+}
+
 /* ============================================================
    画面の切り替え
    ========================================================== */
 
 function showView(name) {
-  ['home', 'month', 'recs'].forEach((v) => {
+  ['home', 'month', 'recs', 'chat', 'all', 'people'].forEach((v) => {
     $('view-' + v).classList.toggle('hidden', v !== name);
   });
+  if (name !== 'chat') stopChatPolling();
   $$('.dock button[data-nav]').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.nav === name);
   });
-  window.scrollTo({ top: 0, behavior: 'instant' });
+  if (name !== 'chat') window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 /* ============================================================
@@ -591,14 +1015,16 @@ function openShelfSwitcher() {
   openSheet('sheet-shelves');
 }
 
-async function createNewShelf(btn) {
-  const name = $('in-new-shelf').value.trim();
+async function createNewShelf(btn, inputId) {
+  const el = $(inputId || 'in-new-shelf');
+  const name = el.value.trim();
   if (!name) { toast('本棚の名前を入れてください'); return; }
   await busy(btn, 'つくっています…', async () => {
     try {
       const d = await authed('createShelf', { name });
       S.shelves = d.shelves;
       closeSheet('sheet-shelves');
+      el.value = '';
       await openShelf(d.shelfId);
       toast(`「${d.name}」をつくりました`);
     } catch (err) { toast(err.message); }
@@ -726,6 +1152,7 @@ function openShare() {
     b.classList.toggle('is-on', (b.dataset.public === 'on') === on);
   });
   $('public-box').classList.toggle('hidden', !on);
+  renderMemberAdmin();
   openSheet('sheet-share');
 }
 
@@ -741,16 +1168,130 @@ async function setPublic(enabled) {
   } catch (err) { toast(err.message); }
 }
 
+
+/* ============================================================
+   メンバーを外す（オーナーのみ）
+   ========================================================== */
+
+function renderMemberAdmin() {
+  const box = $('ui-member-admin');
+  if (!box) return;
+  const canKick = S.shelf.isOwner && S.members.length > 1;
+
+  box.innerHTML = S.members.map((m) => {
+    const me = S.user && m.userId === S.user.userId;
+    const owner = m.role === 'owner';
+    const showRole = S.shelf.isOwner && !owner && !me;
+
+    return `<div class="member-row${showRole ? ' is-stack' : ''}">
+      <b>${esc(m.displayName)}</b>
+      ${owner ? '<span class="member-tag">つくった人</span>' : ''}
+      ${me ? '<span class="member-tag">あなた</span>' : ''}
+      ${!S.shelf.isOwner && !owner ? `<span class="member-tag">${esc(roleLabel(m.role))}</span>` : ''}
+      ${canKick && !me
+        ? `<button class="member-kick" data-kick="${esc(m.userId)}" data-kickname="${esc(m.displayName)}">外す</button>`
+        : ''}
+      ${showRole ? `<div class="role-seg">
+        <button class="${m.role === 'viewer' ? 'is-on' : ''}" data-role="viewer" data-ruser="${esc(m.userId)}">見るだけ</button>
+        <button class="${m.role !== 'viewer' ? 'is-on' : ''}" data-role="editor" data-ruser="${esc(m.userId)}">書き込みOK</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function setMemberRole(userId, role) {
+  try {
+    await authed('setMemberRole', { shelfId: S.shelf.shelfId, userId, role });
+    const m = S.members.find((x) => x.userId === userId);
+    if (m) m.role = role;
+    renderMemberAdmin();
+    toast(role === 'viewer' ? '見るだけにしました' : '書き込みできるようにしました');
+  } catch (err) { toast(err.message); }
+}
+
+async function kickMember(userId, name) {
+  const ok = confirm(
+    `${name} さんをこの本棚から外します。\n\n` +
+    'その人が書いた記録と発言は本棚に残ります。\n' +
+    'もう一度招きたいときは、招待リンクを渡せば戻れます。'
+  );
+  if (!ok) return;
+
+  try {
+    await authed('removeMember', { shelfId: S.shelf.shelfId, userId: userId });
+    toast(`${name} さんを外しました`);
+    await openShelf(S.shelf.shelfId);
+    renderMemberAdmin();
+  } catch (err) { toast(err.message); }
+}
+
+/* ============================================================
+   アカウント削除
+   ========================================================== */
+
+async function openDeleteAccount() {
+  closeSheet('sheet-settings');
+  $('in-delete-confirm').value = '';
+  $('btn-delete-go').disabled = true;
+  $('ui-delete-summary').innerHTML = '<div class="spinner"></div>';
+  openSheet('sheet-delete');
+
+  try {
+    const d = await authed('deletionPreview', {});
+    const rows = [
+      ['あなたの記録', d.entryCount + '件'],
+      ['あなたがつくった本棚', d.ownedShelfCount + '個'],
+      ['参加している他の人の本棚', d.joinedShelfCount + '個']
+    ];
+
+    let html = '<ul class="del-list">' +
+      rows.map(([k, v]) => `<li><span>${esc(k)}</span><b>${esc(v)}</b></li>`).join('') +
+      '</ul>';
+
+    if (d.ownedShelfCount > 0 && d.affectedPeople > 0) {
+      html += `<p class="del-warn">
+        あなたがつくった本棚は、参加している${esc(d.affectedPeople)}人の記録ごと消えます。
+        消える記録は全部で${esc(d.totalEntriesLost)}件です。<br>
+        残したい場合は、先にその人に本棚を作り直してもらってください。
+      </p>`;
+    }
+    html += '<p class="del-warn">元に戻すことはできません。</p>';
+    $('ui-delete-summary').innerHTML = html;
+  } catch (err) {
+    $('ui-delete-summary').innerHTML = `<p class="del-warn">${esc(err.message)}</p>`;
+  }
+}
+
+async function deleteAccount(btn) {
+  await busy(btn, '削除しています…', async () => {
+    try {
+      await authed('deleteAccount', { confirm: $('in-delete-confirm').value.trim() });
+      store.token = '';
+      store.lastShelf = '';
+      store.pendingJoin = null;
+      stopChatPolling();
+      if (unreadTimer) clearInterval(unreadTimer);
+      closeAllSheets();
+      document.body.innerHTML =
+        '<div class="gate"><div class="gate-inner" style="text-align:center">' +
+        '<div class="gate-mark" aria-hidden="true"></div>' +
+        '<h1>ありがとうございました</h1>' +
+        '<p class="gate-lede">アカウントと記録を削除しました。<br>' +
+        'また記録したくなったら、いつでも戻ってきてください。</p></div></div>';
+    } catch (err) { toast(err.message); }
+  });
+}
+
 /* ============================================================
    設定
    ========================================================== */
 
 function openSettings() {
-  $('in-api').value = store.api;
   const loggedIn = !!(store.token && S.user);
   $('account-box').classList.toggle('hidden', !loggedIn);
   $('btn-logout').classList.toggle('hidden', !loggedIn);
   $('logout-hint').classList.toggle('hidden', !loggedIn);
+  $('danger-zone').classList.toggle('hidden', !loggedIn);
   if (loggedIn) {
     $('ui-my-name').textContent = S.user.displayName || '（未設定）';
     $('ui-my-email').textContent = S.user.email;
@@ -802,7 +1343,10 @@ function wireUp() {
   });
 
   /* --- 本棚 --- */
-  $('btn-shelf-switch').addEventListener('click', openShelfSwitcher);
+  $('btn-shelf-switch').addEventListener('click', () => {
+    renderPeople();
+    showView('people');
+  });
   $('btn-shelves-close').addEventListener('click', () => closeSheet('sheet-shelves'));
   $('btn-new-shelf').addEventListener('click', (ev) => createNewShelf(ev.currentTarget));
 
@@ -858,17 +1402,67 @@ function wireUp() {
   $('btn-set-close').addEventListener('click', () => closeSheet('sheet-settings'));
   $('btn-rename-me').addEventListener('click', (ev) => renameMe(ev.currentTarget));
   $('btn-logout').addEventListener('click', logout);
-  $('btn-set-save').addEventListener('click', () => {
-    const v = $('in-api').value.trim();
-    if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(v)) {
-      toast('/exec で終わるウェブアプリURLを入れてください');
-      return;
+
+  /* --- 一覧 --- */
+  $('btn-see-all').addEventListener('click', openAll);
+
+  $('in-search').addEventListener('input', (ev) => {
+    // 打つたびに描き直すと重いので、少し待ってから
+    clearTimeout(searchTimer);
+    const v = ev.target.value;
+    searchTimer = setTimeout(() => { allQuery = v; renderAllList(); }, 180);
+  });
+
+  $('filter-kind').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-kind]');
+    if (!b) return;
+    allKind = b.dataset.kind;
+    $$('#filter-kind .chip').forEach((x) => x.classList.toggle('is-on', x === b));
+    renderAllList();
+  });
+
+  $('filter-who').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-who]');
+    if (!b) return;
+    allWho = b.dataset.who;
+    $$('#filter-who .chip').forEach((x) => x.classList.toggle('is-on', x === b));
+    renderAllList();
+  });
+
+  $('filter-sort').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-sort]');
+    if (!b) return;
+    allSort = b.dataset.sort;
+    $$('#filter-sort .chip').forEach((x) => x.classList.toggle('is-on', x === b));
+    renderAllList();
+  });
+
+  /* --- アカウント削除 --- */
+  $('btn-delete-open').addEventListener('click', openDeleteAccount);
+  $('btn-delete-cancel').addEventListener('click', () => closeSheet('sheet-delete'));
+  $('in-delete-confirm').addEventListener('input', (ev) => {
+    $('btn-delete-go').disabled = ev.target.value.trim() !== '削除';
+  });
+  $('btn-delete-go').addEventListener('click', (ev) => deleteAccount(ev.currentTarget));
+
+  /* --- はなす --- */
+  $('btn-chat-send').addEventListener('click', (ev) => sendMessage(ev.currentTarget));
+  $('btn-quote-clear').addEventListener('click', clearQuote);
+  $('in-chat').addEventListener('input', (ev) => autoGrow(ev.target));
+  $('in-chat').addEventListener('keydown', (ev) => {
+    // PCでは Enter で送信、Shift+Enter で改行。スマホは改行のまま。
+    const isDesktop = window.matchMedia('(min-width: 720px)').matches;
+    if (isDesktop && ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) {
+      ev.preventDefault();
+      $('btn-chat-send').click();
     }
-    const changed = v !== store.api;
-    store.api = v;
-    closeSheet('sheet-settings');
-    toast('保存しました');
-    if (changed) boot();
+  });
+
+  // 画面を戻したときに追いつく
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (!$('view-chat').classList.contains('hidden')) pullMessages(false);
+    else checkUnread();
   });
 
   /* --- ナビ --- */
@@ -881,7 +1475,9 @@ function wireUp() {
     const b = ev.target.closest('button[data-nav]');
     if (!b) return;
     location.hash = '';
-    showView(b.dataset.nav);
+    if (b.dataset.nav === 'chat') openChat();
+    else if (b.dataset.nav === 'people') { renderPeople(); showView('people'); }
+    else showView(b.dataset.nav);
   });
 
   $$('.veil').forEach((v) => {
@@ -894,6 +1490,26 @@ function wireUp() {
     if (shelfBtn) {
       closeSheet('sheet-shelves');
       if (shelfBtn.dataset.shelf !== S.shelf.shelfId) openShelf(shelfBtn.dataset.shelf);
+      return;
+    }
+
+    const roleBtn = ev.target.closest('[data-role]');
+    if (roleBtn) {
+      setMemberRole(roleBtn.dataset.ruser, roleBtn.dataset.role);
+      return;
+    }
+
+    const kickBtn = ev.target.closest('[data-kick]');
+    if (kickBtn) {
+      kickMember(kickBtn.dataset.kick, kickBtn.dataset.kickname);
+      return;
+    }
+
+    const talkBtn = ev.target.closest('[data-talk]');
+    if (talkBtn) {
+      let ref;
+      try { ref = JSON.parse(talkBtn.dataset.talk); } catch (e) { return; }
+      talkAbout(ref);
       return;
     }
 
@@ -940,6 +1556,47 @@ function wireUp() {
 /* ============================================================
    Service Worker
    ========================================================== */
+
+/**
+ * 保存領域を消さないよう申請する。
+ * iOS Safari は7日間使わないと localStorage を消してしまうため、
+ * ここで永続化を頼んでおく（許可されるかは端末次第）。
+ */
+async function askPersistentStorage() {
+  if (!navigator.storage || !navigator.storage.persist) return;
+  try {
+    if (await navigator.storage.persisted()) return;
+    await navigator.storage.persist();
+  } catch (err) { /* 使えない環境では何もしない */ }
+}
+
+/** ブラウザのタブで開いているなら、ホーム画面に追加を勧める。 */
+function maybeShowInstallHint() {
+  if (localStorage.getItem(LS.hint) === '1') return;
+  // 本棚を開くたびに呼ばれるので、すでに出ていたら何もしない
+  if (document.querySelector('.install-hint')) return;
+
+  const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                     window.navigator.standalone === true;
+  if (standalone) return;
+
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const box = document.createElement('div');
+  box.className = 'install-hint';
+  box.innerHTML =
+    '<p>' + (ios
+      ? 'Safariのままだと、7日開かないとログインが切れます。共有ボタンから<b>「ホーム画面に追加」</b>しておくと切れません。'
+      : 'ホーム画面に追加しておくと、アプリのように開けてログインも長持ちします。') +
+    '</p><button class="close" aria-label="閉じる">×</button>';
+
+  box.querySelector('.close').addEventListener('click', () => {
+    localStorage.setItem(LS.hint, '1');
+    box.remove();
+  });
+
+  const anchor = $('readonly-note');
+  anchor.parentNode.insertBefore(box, anchor.nextSibling);
+}
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
