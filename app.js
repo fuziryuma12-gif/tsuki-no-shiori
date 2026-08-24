@@ -294,7 +294,6 @@ async function afterLogin() {
   // 1人1つの本棚。開くのは常に自分のもの。
   const mine = S.shelves.find((s) => s.isMine);
   await openShelf(mine ? mine.shelfId : S.shelves[0].shelfId);
-  checkUnread();
   startUnreadPolling();
 }
 
@@ -418,6 +417,8 @@ async function openShelf(shelfId) {
     if (d.me) S.user = d.me;
     if (d.shelves && d.shelves.length) S.shelves = d.shelves;
     if (d.canEdit) store.lastShelf = shelfId;
+    // 未読はまとめて返ってくるので、ここで通信を追加しない
+    if (d.unreadAll) unreadByShelf = d.unreadAll;
     unreadByShelf[shelfId] = d.unread || 0;
 
     // 本棚を移ったら会話も入れ替える
@@ -440,9 +441,6 @@ async function openShelf(shelfId) {
 
 function renderAll() {
   $('ui-shelf-name').textContent = S.shelf.name;
-  $('ui-shelf-sub').textContent = S.canEdit
-    ? (S.user ? S.user.displayName + 'として記録中' : '')
-    : '読むだけのモード';
 
   // 読むだけの人には、なぜ書けないのかを出す
   const note = $('readonly-note');
@@ -707,9 +705,10 @@ function mergeMessages(list) {
 
 async function openChat() {
   const owner = S.members.find((m) => m.role === 'owner');
-  $('ui-board-title').textContent = (owner && !S.shelf.isOwner)
-    ? `${owner.displayName}さんの本棚の回覧板`
-    : 'この本棚の回覧板';
+  $('ui-board-title').textContent = S.shelf.isOwner
+    ? '自分の本棚のコメント'
+    : (owner ? `${owner.displayName}さんの本棚のコメント` : 'コメント');
+  $('btn-board-back').textContent = S.shelf.isOwner ? '自分の本棚へ' : 'この本棚に戻る';
   showView('chat');
   if (!messages.length) {
     $('ui-chat-log').innerHTML = '<div class="spinner"></div>';
@@ -823,6 +822,11 @@ async function talkAbout(ref) {
  */
 function renderUnread() {
   if (S.shelf) renderBoardTile();
+
+  // タブの印は「自分の本棚」に来たコメントだけを見る
+  const mine = S.shelves.find((x) => x.isMine);
+  const mineUnread = mine ? (unreadByShelf[mine.shelfId] || 0) : 0;
+  $('ui-unread-dot').classList.toggle('hidden', mineUnread === 0);
 
   // 共有された本棚に未読があれば「みんな」タブにも印を出す
   const others = S.shelves.filter((x) => !x.isMine)
@@ -981,8 +985,21 @@ function renderBoardTile() {
     : 'まだコメントはありません。';
 
   $('ui-board-lede').textContent = lede;
-  $('ui-unread-dot').classList.toggle('hidden', unread === 0);
+  $('ui-tile-dot').classList.toggle('hidden', unread === 0);
   $('btn-open-board').textContent = unread ? `コメントを読む（${unread}）` : '回覧板をひらく';
+}
+
+/**
+ * 「コメント」タブ。
+ * 自分の本棚に来たコメントを見る場所なので、
+ * 他の人の本棚を開いていたら自分のものに切り替えてから開く。
+ */
+async function openMyBoard() {
+  const mine = S.shelves.find((x) => x.isMine);
+  if (mine && (!S.shelf || S.shelf.shelfId !== mine.shelfId)) {
+    await openShelf(mine.shelfId);
+  }
+  await openChat();
 }
 
 /** 「本棚」タブ。他の人の本棚を見ていたら、自分のものに戻す。 */
@@ -1000,8 +1017,11 @@ function showView(name) {
     $('view-' + v).classList.toggle('hidden', v !== name);
   });
   if (name !== 'chat') stopChatPolling();
+
+  // 回覧板の画面は「コメント」タブとして光らせる
+  const navName = name === 'chat' ? 'board' : (name === 'month' || name === 'all' ? 'home' : name);
   $$('.dock button[data-nav]').forEach((b) => {
-    b.classList.toggle('is-on', b.dataset.nav === name);
+    b.classList.toggle('is-on', b.dataset.nav === navName);
   });
   if (name !== 'chat') window.scrollTo({ top: 0, behavior: 'instant' });
 }
@@ -1470,6 +1490,7 @@ function wireUp() {
     if (b.dataset.nav === 'people') { renderPeople(); showView('people'); }
     else if (b.dataset.nav === 'account') openAccount();
     else if (b.dataset.nav === 'home') goHome();
+    else if (b.dataset.nav === 'board') openMyBoard();
     else showView(b.dataset.nav);
   });
 
