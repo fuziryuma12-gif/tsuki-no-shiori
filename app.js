@@ -273,6 +273,7 @@ window.addEventListener('unhandledrejection', (ev) => reportUnexpected(ev.reason
 
 window.addEventListener('DOMContentLoaded', () => {
   wireUp();
+  lockZoom();
   registerServiceWorker();
   askPersistentStorage();
   boot();
@@ -663,29 +664,66 @@ function renderMonthView(month) {
 
 /* ---------- おすすめ ---------- */
 
+/** 「2026.08.24」のような表示に。当日なら「今日」。 */
+function recWhen(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const today = new Date();
+  const same = d.toDateString() === today.toDateString();
+  if (same) return '今日 ' + String(d.getHours()) + ':' + String(d.getMinutes()).padStart(2, '0');
+  return iso.slice(0, 10).replace(/-/g, '.');
+}
+
 function renderRecs() {
   const body = $('ui-recs-body');
+
+  // 何度でも聞けることが分かるよう、ボタンは常に一番上に置く
+  const askBtn = S.canWrite
+    ? `<button class="btn btn-primary btn-block" id="btn-ask-again">
+         ${S.recs.length ? 'もう一度聞く' : 'おすすめを聞く'}
+       </button>`
+    : '';
+
   if (!S.recs.length) {
     body.innerHTML = `<div class="blank">
       <p>おすすめはまだありません。<br>記録がいくつか集まると、傾向から選べるようになります。</p>
-      ${S.canEdit ? '<button class="btn btn-primary" id="btn-recs-empty-go">おすすめを聞く</button>' : ''}
+      ${askBtn}
     </div>`;
-    const b = $('btn-recs-empty-go');
+    const b = $('btn-ask-again');
     if (b) b.addEventListener('click', openAiSheet);
     return;
   }
 
-  body.innerHTML = S.recs.map((r, idx) => {
-    const when = r.createdAt ? r.createdAt.slice(0, 10).replace(/-/g, '.') : '';
+  const list = S.recs.map((r, idx) => {
     const by = r.by ? ' ・ ' + r.by : '';
-    return `<div style="margin-bottom:26px">
-      <p class="eyebrow">${esc(when + by)}${idx === 0 ? ' ・ 最新' : ''}</p>
-      <div class="sug-list">${r.items.map((it) => sugCard(it, r.recId)).join('')}</div>
+    const kindLabel = r.kind === 'book' ? '本' : r.kind === 'movie' ? '映画' : '本と映画';
+    const head = idx === 0
+      ? `<p class="eyebrow">最新 ・ ${esc(recWhen(r.createdAt))}${esc(by)}</p>`
+      : `<p class="eyebrow">${esc(recWhen(r.createdAt))}${esc(by)} ・ ${esc(kindLabel)}</p>`;
+
+    // 過去の分は畳んでおく。開くまでは場所を取らない
+    const cards = `<div class="sug-list">${r.items.map((it) => sugCard(it, r.recId)).join('')}</div>
       <div class="btn-row" style="margin-top:12px">
         <button class="btn btn-paper" data-share-rec="${esc(r.recId)}">この${r.items.length}件をまとめて共有</button>
-      </div>
-    </div>`;
+      </div>`;
+
+    if (idx === 0) {
+      return `<div class="rec-block">${head}${cards}</div>`;
+    }
+    return `<details class="rec-block rec-past">
+      <summary>${head}<span class="rec-count">${r.items.length}件</span></summary>
+      <div style="margin-top:12px">${cards}</div>
+    </details>`;
   }).join('');
+
+  body.innerHTML = `
+    ${askBtn ? `<div class="rec-ask">${askBtn}</div>` : ''}
+    ${list}
+    ${S.recs.length > 1 ? '<p class="rec-note">これまでのおすすめは5回分まで残ります。</p>' : ''}
+  `;
+
+  const b = $('btn-ask-again');
+  if (b) b.addEventListener('click', openAiSheet);
 }
 
 function sugCard(it, recId) {
@@ -1239,8 +1277,12 @@ async function runRecommend() {
   const mood = $('in-mood').value.trim();
   closeSheet('sheet-ai');
   showView('recs');
-  $('ui-recs-body').innerHTML =
-    '<div class="spinner"></div><p class="wait">これまでのしおりを読み返しています…</p>';
+  // 履歴は残したまま、上に「考え中」を差し込む
+  renderRecs();
+  const wait = document.createElement('div');
+  wait.id = 'ui-rec-wait';
+  wait.innerHTML = '<div class="spinner"></div><p class="wait">これまでのしおりを読み返しています…</p>';
+  $('ui-recs-body').prepend(wait);
 
   try {
     const d = await authed('recommend', {
@@ -1252,11 +1294,15 @@ async function runRecommend() {
     S.recs = [d.rec].concat(S.recs).slice(0, 5);
     renderRecs();
   } catch (err) {
-    $('ui-recs-body').innerHTML =
-      `<div class="blank"><p>${esc(err.message)}</p>
-       <button class="btn btn-primary" id="btn-retry-ai">もう一度ためす</button></div>`;
-    const b = $('btn-retry-ai');
-    if (b) b.addEventListener('click', openAiSheet);
+    // それまでの履歴は消さず、上にお知らせだけ出す
+    renderRecs();
+    const box = document.createElement('div');
+    box.className = 'blank';
+    box.style.marginBottom = '18px';
+    box.innerHTML = `<p>${esc(err.message)}</p>
+      <button class="btn btn-primary" id="btn-retry-ai">もう一度ためす</button>`;
+    $('ui-recs-body').prepend(box);
+    $('btn-retry-ai').addEventListener('click', openAiSheet);
   }
 }
 
@@ -1704,6 +1750,26 @@ function maybeShowInstallHint() {
 
   const anchor = $('readonly-note');
   anchor.parentNode.insertBefore(box, anchor.nextSibling);
+}
+
+/**
+ * 指でつまんだり2回たたいたりしたときの拡大を止める。
+ * iOS Safari は viewport の user-scalable=no を無視するので、
+ * ここで実際の操作を受け止める必要がある。
+ */
+function lockZoom() {
+  // 指2本でのつまみ拡大（Safari 独自のイベント）
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((ev) => {
+    document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+  });
+
+  // 2本以上の指で触れたときも拡大させない
+  document.addEventListener('touchmove', (e) => {
+    if (e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+
+  // 2回たたきによる拡大は CSS の touch-action: manipulation に任せる。
+  // ここで touchend を止めると、星の連打などが効かなくなるため。
 }
 
 function registerServiceWorker() {
