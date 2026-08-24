@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>月のしおり</title>
+<meta name="description" content="月に一度、読んだ本と観た映画をふり返って記録する。">
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FBE4EA">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="月のしおり">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ========== ログイン ========== -->
+<div id="gate" class="gate hidden">
+  <div class="gate-inner">
+    <div class="gate-mark" aria-hidden="true"></div>
+    <h1>月のしおり</h1>
+    <p class="gate-lede">
+      月に一度、好きなときに。<br>
+      読んだ本と観た映画を、ここに挟んでおく。
+    </p>
+
+    <!-- 1. メールを入れる -->
+    <div class="gate-card" id="step-email">
+      <div class="field">
+        <label for="in-email">メールアドレス</label>
+        <input type="email" id="in-email" inputmode="email" autocomplete="email"
+               autocapitalize="off" spellcheck="false" placeholder="you@example.com">
+        <p class="field-hint">
+          6桁のコードをお送りします。パスワードはありません。<br>
+          はじめての方は、これがそのまま登録になります。
+        </p>
+      </div>
+      <button class="btn btn-primary btn-block" id="btn-send-code">コードを送る</button>
+    </div>
+
+    <!-- 2. コードを入れる -->
+    <div class="gate-card hidden" id="step-code">
+      <p class="eyebrow">メールを確認</p>
+      <p class="gate-note">
+        <b id="ui-sent-to">—</b> に6桁のコードを送りました。<br>
+        10分で使えなくなります。
+      </p>
+      <div class="field">
+        <label for="in-code">コード</label>
+        <input type="text" id="in-code" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" class="code-input" placeholder="000000">
+      </div>
+      <button class="btn btn-primary btn-block" id="btn-verify">ログイン</button>
+      <div class="btn-row" style="margin-top:9px">
+        <button class="btn btn-line" id="btn-back-email">メールを変える</button>
+        <button class="btn btn-line" id="btn-resend">もう一度送る</button>
+      </div>
+      <p class="field-hint" style="margin-top:12px">
+        届かないときは迷惑メールをご確認ください。
+      </p>
+    </div>
+
+    <!-- 3. 初回だけ呼び名を決める -->
+    <div class="gate-card hidden" id="step-profile">
+      <p class="eyebrow">はじめまして</p>
+      <p class="gate-note">
+        本棚に並ぶときの呼び名を決めてください。<br>
+        あとから変えられます。
+      </p>
+      <div class="field">
+        <label for="in-display-name">呼び名</label>
+        <input type="text" id="in-display-name" maxlength="20" placeholder="りゅうま">
+      </div>
+      <div class="field" id="field-first-shelf">
+        <label for="in-first-shelf">最初の本棚の名前</label>
+        <input type="text" id="in-first-shelf" maxlength="40" placeholder="わたしの本棚">
+      </div>
+      <button class="btn btn-primary btn-block" id="btn-start">はじめる</button>
+    </div>
+
+    <!-- 招待リンクから来たとき -->
+    <div class="gate-card hidden" id="step-invite">
+      <p class="eyebrow">招待されました</p>
+      <p class="gate-note">
+        ログインすると、この本棚に参加できます。
+      </p>
+      <button class="btn btn-primary btn-block" id="btn-invite-login">ログインへ進む</button>
+    </div>
+
+    <p class="gate-foot">
+      <button class="linky" id="btn-gate-settings">接続先の設定</button>
+    </p>
+  </div>
+</div>
+
+<!-- ========== 本体 ========== -->
+<div id="app" class="shell hidden">
+
+  <header class="topbar">
+    <div class="topbar-mark" aria-hidden="true"></div>
+    <button class="topbar-text" id="btn-shelf-switch">
+      <span class="topbar-name" id="ui-shelf-name">—</span>
+      <span class="topbar-sub" id="ui-shelf-sub"></span>
+    </button>
+    <button class="icon-btn" id="btn-settings" aria-label="設定">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>
+      </svg>
+    </button>
+  </header>
+
+  <div id="readonly-note" class="readonly-note hidden">
+    共有された本棚を見ています。記録の追加はできません。
+  </div>
+
+  <!-- ---- ホーム ---- -->
+  <main id="view-home" class="bento">
+
+    <section class="tile tile-now">
+      <div class="ribbon" aria-hidden="true"></div>
+      <div class="now-head">
+        <p class="eyebrow">今月</p>
+        <div class="now-month" id="ui-now-month">—</div>
+        <div class="now-count" id="ui-now-count"></div>
+      </div>
+      <ul class="rec-list now-list" id="ui-now-list"></ul>
+      <div class="now-empty hidden" id="ui-now-empty">
+        まだ今月のしおりは白紙です。<br>読み終えた一冊から挟んでみてください。
+      </div>
+    </section>
+
+    <section class="tile tile-stat">
+      <div>
+        <p class="eyebrow">Books</p>
+        <div class="stat-num" id="ui-book-count">0<span>冊</span></div>
+      </div>
+      <div class="stat-label">これまでの本</div>
+    </section>
+
+    <section class="tile tile-stat">
+      <div>
+        <p class="eyebrow">Films</p>
+        <div class="stat-num" id="ui-movie-count">0<span>本</span></div>
+      </div>
+      <div class="stat-label">これまでの映画</div>
+    </section>
+
+    <section class="tile tile-ai">
+      <p class="eyebrow">Librarian</p>
+      <h3 class="tile-title">あなたの記録から、次の一冊を</h3>
+      <p class="ai-lede">
+        これまでのしおりを読み返して、まだ出会っていない作品を選びます。
+      </p>
+      <button class="btn btn-onink" id="btn-ai-open">おすすめを聞く</button>
+    </section>
+
+    <section class="tile tile-recent">
+      <p class="eyebrow">Recent</p>
+      <h3 class="tile-title">最近のしおり</h3>
+      <ul class="rec-list" id="ui-recent-list"></ul>
+    </section>
+
+    <section class="tile tile-share">
+      <p class="eyebrow">Shelf</p>
+      <h3 class="tile-title">この本棚の人</h3>
+      <div class="member-dots" id="ui-members"></div>
+      <button class="btn btn-quiet btn-block" id="btn-share-open" style="margin-top:14px">共有する</button>
+    </section>
+
+    <section class="tile tile-months">
+      <p class="eyebrow">Archive</p>
+      <h3 class="tile-title">月をさかのぼる</h3>
+      <div class="month-strip" id="ui-month-strip"></div>
+    </section>
+
+  </main>
+
+  <!-- ---- ひと月の詳細 ---- -->
+  <main id="view-month" class="hidden">
+    <div class="view-head">
+      <p class="eyebrow" id="ui-month-eyebrow">Archive</p>
+      <h2 id="ui-month-title">—</h2>
+    </div>
+    <div class="tile tile-wide">
+      <ul class="rec-list" id="ui-month-list"></ul>
+    </div>
+    <div style="margin-top:14px">
+      <button class="btn btn-quiet" id="btn-month-back">ホームに戻る</button>
+    </div>
+  </main>
+
+  <!-- ---- おすすめ ---- -->
+  <main id="view-recs" class="hidden">
+    <div class="view-head">
+      <p class="eyebrow">Librarian</p>
+      <h2>AIのおすすめ</h2>
+    </div>
+    <div id="ui-recs-body"></div>
+  </main>
+
+  <nav class="dock" id="dock">
+    <button data-nav="home" class="is-on">ホーム</button>
+    <button data-nav="recs">おすすめ</button>
+    <button class="dock-add" id="btn-add">＋ 記録する</button>
+  </nav>
+
+</div>
+
+<!-- ========== 本棚の切り替え ========== -->
+<div id="sheet-shelves" class="veil hidden">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shelves-heading">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <h2 id="shelves-heading">本棚を選ぶ</h2>
+    <div id="ui-shelf-list" class="shelf-list"></div>
+
+    <div class="field" style="margin-top:20px">
+      <label for="in-new-shelf">新しい本棚をつくる</label>
+      <input type="text" id="in-new-shelf" maxlength="40" placeholder="2027年の記録">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-line" id="btn-shelves-close">閉じる</button>
+      <button class="btn btn-primary" id="btn-new-shelf">つくる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 記録シート ========== -->
+<div id="sheet-entry" class="veil hidden">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="entry-heading">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <h2 id="entry-heading">しおりを挟む</h2>
+
+    <div class="field">
+      <label>種類</label>
+      <div class="seg" id="seg-kind">
+        <button type="button" data-kind="book" class="is-on">本</button>
+        <button type="button" data-kind="movie">映画</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="in-title">タイトル</label>
+      <input type="text" id="in-title" maxlength="120">
+    </div>
+
+    <div class="field">
+      <label for="in-creator" id="lbl-creator">著者</label>
+      <input type="text" id="in-creator" maxlength="80">
+    </div>
+
+    <div class="field">
+      <label for="in-month" id="lbl-month">読み終えた月</label>
+      <input type="month" id="in-month">
+    </div>
+
+    <div class="field">
+      <label>よかった度</label>
+      <div class="rate" id="rate-stars"></div>
+    </div>
+
+    <div class="field">
+      <label for="in-note">ひとこと</label>
+      <textarea id="in-note" maxlength="600" placeholder="どんな読後感だったか、ひと言だけでも。あとでAIがここを読みます。"></textarea>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-line" id="btn-entry-cancel">やめる</button>
+      <button class="btn btn-primary" id="btn-entry-save">保存する</button>
+    </div>
+    <button class="btn btn-line btn-danger btn-block hidden" id="btn-entry-delete" style="margin-top:9px">この記録を消す</button>
+  </div>
+</div>
+
+<!-- ========== 共有シート ========== -->
+<div id="sheet-share" class="veil hidden">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="share-heading">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <h2 id="share-heading">この本棚を共有する</h2>
+
+    <div class="field">
+      <label>友人を招く</label>
+      <p class="field-hint" style="margin:0 0 4px">
+        リンクを開いた人はログインしたうえで、この本棚に参加します。
+      </p>
+      <div class="link-box">
+        <code id="ui-invite-url">—</code>
+        <button class="btn btn-primary" data-copy="ui-invite-url">コピー</button>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:22px">
+      <label>読むだけのリンク</label>
+      <p class="field-hint" style="margin:0 0 8px">
+        公開すると、ログインなしでも中身を見られます。書き込みはできません。
+      </p>
+      <div class="seg" id="seg-public">
+        <button type="button" data-public="off" class="is-on">公開しない</button>
+        <button type="button" data-public="on">公開する</button>
+      </div>
+      <div class="link-box hidden" id="public-box">
+        <code id="ui-public-url">—</code>
+        <button class="btn btn-primary" data-copy="ui-public-url">コピー</button>
+      </div>
+    </div>
+
+    <button class="btn btn-line btn-block" id="btn-share-close" style="margin-top:20px">閉じる</button>
+  </div>
+</div>
+
+<!-- ========== おすすめ生成シート ========== -->
+<div id="sheet-ai" class="veil hidden">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ai-heading">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <h2 id="ai-heading">何を探しましょうか</h2>
+
+    <div class="field">
+      <label>ジャンル</label>
+      <div class="seg" id="seg-ai-kind">
+        <button type="button" data-aikind="both" class="is-on">どちらも</button>
+        <button type="button" data-aikind="book">本だけ</button>
+        <button type="button" data-aikind="movie">映画だけ</button>
+      </div>
+    </div>
+
+    <div class="field hidden" id="field-ai-scope">
+      <label>参考にする記録</label>
+      <div class="seg" id="seg-ai-scope">
+        <button type="button" data-aiscope="all" class="is-on">本棚ぜんぶ</button>
+        <button type="button" data-aiscope="mine">自分の記録だけ</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="in-mood">いまの気分（任意）</label>
+      <input type="text" id="in-mood" maxlength="120" placeholder="静かな夜に読めるもの / 頭を使わない映画">
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-line" id="btn-ai-cancel">やめる</button>
+      <button class="btn btn-primary" id="btn-ai-go">選んでもらう</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 設定シート ========== -->
+<div id="sheet-settings" class="veil hidden">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="set-heading">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <h2 id="set-heading">設定</h2>
+
+    <div id="account-box" class="hidden">
+      <div class="field">
+        <label>ログイン中</label>
+        <p class="account-line"><b id="ui-my-name">—</b><br><span id="ui-my-email">—</span></p>
+      </div>
+      <div class="field">
+        <label for="in-rename">呼び名を変える</label>
+        <div class="link-box" style="background:none;padding:0;gap:9px">
+          <input type="text" id="in-rename" maxlength="20" style="flex:1">
+          <button class="btn btn-primary" id="btn-rename-me">変える</button>
+        </div>
+      </div>
+      <hr class="rule">
+    </div>
+
+    <div class="field">
+      <label for="in-api">GAS のウェブアプリ URL</label>
+      <input type="text" id="in-api" placeholder="https://script.google.com/macros/s/.../exec">
+      <p class="field-hint">
+        Apps Script を「ウェブアプリとしてデプロイ」したときに出るURLです。<br>
+        この端末にだけ保存されます。
+      </p>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-line" id="btn-set-close">閉じる</button>
+      <button class="btn btn-primary" id="btn-set-save">保存する</button>
+    </div>
+
+    <button class="btn btn-line btn-danger btn-block hidden" id="btn-logout" style="margin-top:22px">
+      ログアウト
+    </button>
+    <p class="field-hint hidden" id="logout-hint">
+      この端末からログアウトします。記録は残るので、同じメールでログインし直せば元に戻ります。
+    </p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

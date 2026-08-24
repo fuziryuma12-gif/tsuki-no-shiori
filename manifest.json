@@ -1,0 +1,41 @@
+{
+  "name": "月のしおり",
+  "short_name": "月のしおり",
+  "description": "月に一度、読んだ本と観た映画をふり返って記録する。",
+  "lang": "ja",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBE4EA",
+  "theme_color": "#FBE4EA",
+  "categories": ["books", "lifestyle", "productivity"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "記録する",
+      "short_name": "記録",
+      "url": "./?add=1"
+    }
+  ]
+}
