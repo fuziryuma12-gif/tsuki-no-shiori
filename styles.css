@@ -1438,3 +1438,49 @@ input, select, textarea { font: inherit; color: inherit; }
   background: var(--rouge);
   color: var(--paper);
 }
+
+/* ============================================================
+   読み込み中のおおい
+   ========================================================== */
+
+.busy-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(251, 228, 234, .72);
+  backdrop-filter: blur(3px);
+}
+
+.busy-card {
+  background: var(--paper);
+  border-radius: var(--r-lg);
+  padding: 26px 34px;
+  box-shadow: var(--shadow-lift);
+  text-align: center;
+  min-width: 190px;
+}
+
+.busy-card .spinner { margin: 4px auto 14px; }
+
+.busy-card p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--rouge-deep);
+  letter-spacing: .04em;
+  line-height: 1.7;
+}
+
+/* ログイン画面に残しておくエラー */
+.gate-error {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  background: var(--blush);
+  color: var(--rouge-deep);
+  font-size: 12.5px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
