@@ -22,26 +22,52 @@ const LS = {
   hint: 'shiori.installHintClosed'
 };
 
+/**
+ * localStorage は環境によっては例外を投げる。
+ * （Safariのプライベートモード、保存容量がいっぱい、など）
+ * 保存に失敗しても操作そのものは続けられるよう、ここで受け止めておく。
+ * 失敗した場合はこの実行中だけメモリに持つ。
+ */
+const memStore = {};
+
+function lsGet(key) {
+  try {
+    const v = localStorage.getItem(key);
+    if (v !== null) return v;
+  } catch (e) { /* 使えない環境 */ }
+  return memStore[key] !== undefined ? memStore[key] : null;
+}
+
+function lsSet(key, value) {
+  memStore[key] = value;
+  try { localStorage.setItem(key, value); }
+  catch (e) { /* 保存できなくても続ける */ }
+}
+
+function lsDel(key) {
+  delete memStore[key];
+  try { localStorage.removeItem(key); } catch (e) { /* そのまま */ }
+}
+
 const store = {
-  get api() { return localStorage.getItem(LS.api) || DEFAULT_API; },
-  set api(v) { localStorage.setItem(LS.api, v); },
+  get api() { return lsGet(LS.api) || DEFAULT_API; },
+  set api(v) { lsSet(LS.api, v); },
 
-  get token() { return localStorage.getItem(LS.token) || ''; },
-  set token(v) { v ? localStorage.setItem(LS.token, v) : localStorage.removeItem(LS.token); },
+  get token() { return lsGet(LS.token) || ''; },
+  set token(v) { v ? lsSet(LS.token, v) : lsDel(LS.token); },
 
-  get lastShelf() { return localStorage.getItem(LS.shelf) || ''; },
-  set lastShelf(v) { v ? localStorage.setItem(LS.shelf, v) : localStorage.removeItem(LS.shelf); },
+  get lastShelf() { return lsGet(LS.shelf) || ''; },
+  set lastShelf(v) { v ? lsSet(LS.shelf, v) : lsDel(LS.shelf); },
 
-  get lastEmail() { return localStorage.getItem(LS.email) || ''; },
-  set lastEmail(v) { v ? localStorage.setItem(LS.email, v) : localStorage.removeItem(LS.email); },
+  get lastEmail() { return lsGet(LS.email) || ''; },
+  set lastEmail(v) { v ? lsSet(LS.email, v) : lsDel(LS.email); },
 
   get pendingJoin() {
-    try { return JSON.parse(localStorage.getItem(LS.pending) || 'null'); }
+    try { return JSON.parse(lsGet(LS.pending) || 'null'); }
     catch (e) { return null; }
   },
   set pendingJoin(v) {
-    v ? localStorage.setItem(LS.pending, JSON.stringify(v))
-      : localStorage.removeItem(LS.pending);
+    v ? lsSet(LS.pending, JSON.stringify(v)) : lsDel(LS.pending);
   }
 };
 
@@ -226,6 +252,25 @@ async function busy(btn, label, fn) {
    起動とルーティング
    ========================================================== */
 
+/**
+ * 想定していないエラーを黙って落とさない。
+ * 「押したのに何も起きない」を見えるようにする。
+ */
+function reportUnexpected(err) {
+  const msg = (err && (err.message || err)) + '';
+  const onGate = !$('gate').classList.contains('hidden');
+  if (onGate) {
+    const codeVisible = !$('step-code').classList.contains('hidden');
+    gateError(codeVisible ? 'code' : 'email', '予期しないエラー: ' + msg);
+  } else {
+    toast('予期しないエラー: ' + msg);
+  }
+  hideBusy();
+}
+
+window.addEventListener('error', (ev) => reportUnexpected(ev.error || ev.message));
+window.addEventListener('unhandledrejection', (ev) => reportUnexpected(ev.reason));
+
 window.addEventListener('DOMContentLoaded', () => {
   wireUp();
   registerServiceWorker();
@@ -372,13 +417,15 @@ async function sendCode(btn) {
       $('hint-goto-code').classList.remove('hidden');
       return;
     }
-    // 送信が通ったら、必ずコード入力へ進む
+    // 送信が通ったら、何よりも先に画面を切り替える。
+    // 後続の処理でつまずいても、コード入力にはたどり着けるようにする。
     pendingEmail = email;
-    store.lastEmail = email;
     $('ui-sent-to').textContent = email;
     $('in-code').value = '';
     gateError('code', '');
     showGate('code');
+
+    try { store.lastEmail = email; } catch (e) { /* 覚えられなくても支障はない */ }
   });
 }
 
@@ -1633,7 +1680,7 @@ async function askPersistentStorage() {
 
 /** ブラウザのタブで開いているなら、ホーム画面に追加を勧める。 */
 function maybeShowInstallHint() {
-  if (localStorage.getItem(LS.hint) === '1') return;
+  if (lsGet(LS.hint) === '1') return;
   // 本棚を開くたびに呼ばれるので、すでに出ていたら何もしない
   if (document.querySelector('.install-hint')) return;
 
@@ -1651,7 +1698,7 @@ function maybeShowInstallHint() {
     '</p><button class="close" aria-label="閉じる">×</button>';
 
   box.querySelector('.close').addEventListener('click', () => {
-    localStorage.setItem(LS.hint, '1');
+    lsSet(LS.hint, '1');
     box.remove();
   });
 
