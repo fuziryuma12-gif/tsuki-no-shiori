@@ -6,6 +6,20 @@
 'use strict';
 
 /**
+ * 記録できる種類。ここに足すだけで、フォームも絞り込みも増える。
+ */
+const KINDS = [
+  { id: 'book',  label: '本',     unit: '冊', creator: '著者', done: '読み終えた月' },
+  { id: 'movie', label: '映画',   unit: '本', creator: '監督', done: '観た月' },
+  { id: 'anime', label: 'アニメ', unit: '作', creator: '制作', done: '観た月' }
+];
+
+const KIND = {};
+KINDS.forEach((k) => { KIND[k.id] = k; });
+
+function kindOf(id) { return KIND[id] || KIND.book; }
+
+/**
  * 接続先の GAS ウェブアプリ URL。
  * ここに書いておくと、リンクを開いた人が設定なしでそのまま使える。
  * 端末の設定画面で入れた値があれば、そちらが優先される。
@@ -19,7 +33,8 @@ const LS = {
   shelf: 'shiori.lastShelfId',
   pending: 'shiori.pendingJoin',
   email: 'shiori.lastEmail',
-  hint: 'shiori.installHintClosed'
+  hint: 'shiori.installHintClosed',
+  theme: 'shiori.theme'
 };
 
 /**
@@ -272,6 +287,7 @@ window.addEventListener('error', (ev) => reportUnexpected(ev.error || ev.message
 window.addEventListener('unhandledrejection', (ev) => reportUnexpected(ev.reason));
 
 window.addEventListener('DOMContentLoaded', () => {
+  applyTheme(currentTheme());
   wireUp();
   lockZoom();
   registerServiceWorker();
@@ -571,11 +587,15 @@ function renderNow() {
   $('ui-now-month').innerHTML = esc(p.month) + '<small>月</small>';
 
   const list = S.entries.filter((e) => e.month === m);
-  const books = list.filter((e) => e.kind === 'book').length;
-  const films = list.filter((e) => e.kind === 'movie').length;
+  const parts = KINDS
+    .map((k) => {
+      const n = list.filter((e) => e.kind === k.id).length;
+      return n ? k.label + n : null;
+    })
+    .filter(Boolean);
 
-  $('ui-now-count').textContent = list.length
-    ? p.year + '年 ・ 本' + books + ' 映画' + films
+  $('ui-now-count').textContent = parts.length
+    ? p.year + '年 ・ ' + parts.join(' ')
     : p.year + '年';
 
   const ul = $('ui-now-list');
@@ -585,10 +605,12 @@ function renderNow() {
 }
 
 function renderCounts() {
-  $('ui-book-count').innerHTML =
-    S.entries.filter((e) => e.kind === 'book').length + '<span>冊</span>';
-  $('ui-movie-count').innerHTML =
-    S.entries.filter((e) => e.kind === 'movie').length + '<span>本</span>';
+  KINDS.forEach((k) => {
+    const el = $('ui-' + k.id + '-count');
+    if (!el) return;
+    const n = S.entries.filter((e) => e.kind === k.id).length;
+    el.innerHTML = n + `<span>${k.unit}</span>`;
+  });
 }
 
 function renderRecent() {
@@ -609,7 +631,7 @@ function entryRow(e, withMonth) {
   ].filter(Boolean).join(' ・ ');
 
   return `<li class="rec-row">
-    <span class="kind-chip${e.kind === 'movie' ? ' is-movie' : ''}">${e.kind === 'movie' ? '映画' : '本'}</span>
+    <span class="kind-chip is-${esc(e.kind)}">${esc(kindOf(e.kind).label)}</span>
     <span class="rec-body">
       <span class="rec-title">${esc(e.title)}</span>
       ${meta ? `<span class="rec-meta">${esc(meta)}</span>` : ''}
@@ -729,7 +751,7 @@ function renderRecs() {
 function sugCard(it, recId) {
   return `<article class="sug">
     <div class="sug-head">
-      <span class="kind-chip${it.kind === 'movie' ? ' is-movie' : ''}">${it.kind === 'movie' ? '映画' : '本'}</span>
+      <span class="kind-chip is-${esc(it.kind)}">${esc(kindOf(it.kind).label)}</span>
       <div style="min-width:0">
         <div class="sug-title">${esc(it.title)}</div>
         <div class="sug-meta">${esc([it.creator, it.year].filter(Boolean).join(' ・ '))}</div>
@@ -799,7 +821,7 @@ function renderChat() {
     // 吹き出しは本文だけ改行を活かすので、引用部分は1行に詰めて書く
     const ref = m.ref
       ? `<span class="msg-ref">` +
-        `<span class="kind-chip${m.ref.kind === 'movie' ? ' is-movie' : ''}">${m.ref.kind === 'movie' ? '映画' : '本'}</span>` +
+        `<span class="kind-chip is-${esc(m.ref.kind)}">${esc(kindOf(m.ref.kind).label)}</span>` +
         `<span class="msg-ref-body"><b>${esc(m.ref.title)}</b>` +
         (m.ref.creator ? `<i>${esc(m.ref.creator)}</i>` : '') +
         `</span></span>`
@@ -927,8 +949,8 @@ async function markChatRead() {
 function setQuote(ref) {
   quoted = ref;
   $('ui-quote').classList.remove('hidden');
-  $('ui-quote-kind').textContent = ref.kind === 'movie' ? '映画' : '本';
-  $('ui-quote-kind').classList.toggle('is-movie', ref.kind === 'movie');
+  $('ui-quote-kind').textContent = kindOf(ref.kind).label;
+  $('ui-quote-kind').className = 'kind-chip is-' + ref.kind;
   $('ui-quote-title').textContent = ref.title;
   $('ui-quote-creator').textContent = ref.creator || '';
 }
@@ -1046,11 +1068,15 @@ function filteredEntries() {
 
 function renderAllList() {
   const list = filteredEntries();
-  const books = list.filter((e) => e.kind === 'book').length;
-  const films = list.length - books;
+  const parts = KINDS
+    .map((k) => {
+      const n = list.filter((e) => e.kind === k.id).length;
+      return n ? k.label + n : null;
+    })
+    .filter(Boolean);
 
   $('ui-all-count').textContent = list.length
-    ? `${list.length}件（本${books} ・ 映画${films}）／ 全${S.entries.length}件`
+    ? `${list.length}件（${parts.join(' ・ ')}）／ 全${S.entries.length}件`
     : `全${S.entries.length}件のうち、条件に合うものはありません`;
 
   $('ui-all-list').innerHTML = list.length
@@ -1215,8 +1241,9 @@ function openEntry(entry) {
 
 function syncKind() {
   $$('#seg-kind button').forEach((b) => b.classList.toggle('is-on', b.dataset.kind === formKind));
-  $('lbl-creator').textContent = formKind === 'movie' ? '監督' : '著者';
-  $('lbl-month').textContent = formKind === 'movie' ? '観た月' : '読み終えた月';
+  const k = kindOf(formKind);
+  $('lbl-creator').textContent = k.creator;
+  $('lbl-month').textContent = k.done;
 }
 
 function renderStars() {
@@ -1443,6 +1470,49 @@ async function deleteAccount(btn) {
   });
 }
 
+
+/* ============================================================
+   見た目（色のセット）
+   ============================================================
+   端末ごとの設定。サーバーには送らないので、
+   同じ本棚を見ている人の画面は変わらない。
+   ========================================================== */
+
+const THEMES = [
+  { id: 'sakura', label: 'さくら', colors: ['#FBE4EA', '#B85572', '#FFFFFF'] },
+  { id: 'wakaba', label: 'わかば', colors: ['#E3EFE2', '#4E7C4B', '#FFFFFF'] },
+  { id: 'asagi',  label: 'あさぎ', colors: ['#E0EBF2', '#3D6E8E', '#FFFFFF'] },
+  { id: 'kohaku', label: 'こはく', colors: ['#F6E8D8', '#9E6A35', '#FFFFFF'] },
+  { id: 'fuji',   label: 'ふじ',   colors: ['#E9E5F3', '#6B5896', '#FFFFFF'] },
+  { id: 'sumi',   label: 'すみ',   colors: ['#ECE9E6', '#57524C', '#FFFFFF'] }
+];
+
+function currentTheme() {
+  const saved = localStorage.getItem(LS.theme);
+  return THEMES.some((t) => t.id === saved) ? saved : 'sakura';
+}
+
+/** 色を当てる。上部バーの色も合わせる。 */
+function applyTheme(id) {
+  const t = THEMES.find((x) => x.id === id) || THEMES[0];
+  document.documentElement.setAttribute('data-theme', t.id);
+  localStorage.setItem(LS.theme, t.id);
+
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', t.colors[0]);
+}
+
+function renderThemes() {
+  const now = currentTheme();
+  $('ui-theme-grid').innerHTML = THEMES.map((t) => `
+    <button class="theme-card${t.id === now ? ' is-on' : ''}" data-theme-id="${esc(t.id)}">
+      <span class="theme-swatch">
+        ${t.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}
+      </span>
+      <span>${esc(t.label)}</span>
+    </button>`).join('');
+}
+
 /* ============================================================
    設定
    ========================================================== */
@@ -1453,7 +1523,34 @@ function openAccount() {
     $('ui-my-email').textContent = S.user.email;
     $('in-rename').value = S.user.displayName || '';
   }
+
+  // 本棚の名前は、自分がつくった本棚だけ変えられる
+  const mine = S.shelves.find((x) => x.isMine);
+  $('shelf-settings').classList.toggle('hidden', !mine);
+  if (mine) $('in-shelf-rename').value = mine.name;
+
+  renderThemes();
   showView('account');
+}
+
+/** 本棚の名前を変える。 */
+async function renameShelf(btn) {
+  const mine = S.shelves.find((x) => x.isMine);
+  if (!mine) return;
+  const name = $('in-shelf-rename').value.trim();
+  if (!name) { toast('本棚の名前を入れてください'); return; }
+
+  await busy(btn, '…', async () => {
+    try {
+      const d = await authed('renameShelf', { shelfId: mine.shelfId, name });
+      S.shelves = d.shelves;
+      if (S.shelf && S.shelf.shelfId === mine.shelfId) {
+        S.shelf.name = d.name;
+        $('ui-shelf-name').textContent = d.name;
+      }
+      toast('名前を変えました');
+    } catch (err) { toast(err.message); }
+  });
 }
 
 async function renameMe(btn) {
@@ -1559,6 +1656,14 @@ function wireUp() {
 
   /* --- 設定 --- */
   $('btn-rename-me').addEventListener('click', (ev) => renameMe(ev.currentTarget));
+  $('btn-shelf-rename').addEventListener('click', (ev) => renameShelf(ev.currentTarget));
+
+  $('ui-theme-grid').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-theme-id]');
+    if (!b) return;
+    applyTheme(b.dataset.themeId);
+    renderThemes();
+  });
   $('btn-logout').addEventListener('click', logout);
 
   /* --- 一覧 --- */
