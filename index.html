@@ -17,7 +17,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=12">
+<link rel="stylesheet" href="styles.css?v=13">
+<script>
+  // CSSより先に色を決めておく。あとから当てると一瞬ちらつくため。
+  (function () {
+    var t = localStorage.getItem('shiori.theme') || 'sakura';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
 </head>
 <body>
 
@@ -145,20 +152,24 @@
       </button>
     </section>
 
-    <section class="tile tile-stat">
-      <div>
-        <p class="eyebrow">Books</p>
-        <div class="stat-num" id="ui-book-count">0<span>冊</span></div>
+    <section class="tile tile-stats tile-wide">
+      <div class="stat-row">
+        <div class="stat-cell">
+          <p class="eyebrow">Books</p>
+          <div class="stat-num" id="ui-book-count">0<span>冊</span></div>
+          <div class="stat-label">本</div>
+        </div>
+        <div class="stat-cell">
+          <p class="eyebrow">Films</p>
+          <div class="stat-num" id="ui-movie-count">0<span>本</span></div>
+          <div class="stat-label">映画</div>
+        </div>
+        <div class="stat-cell">
+          <p class="eyebrow">Anime</p>
+          <div class="stat-num" id="ui-anime-count">0<span>作</span></div>
+          <div class="stat-label">アニメ</div>
+        </div>
       </div>
-      <div class="stat-label">これまでの本</div>
-    </section>
-
-    <section class="tile tile-stat">
-      <div>
-        <p class="eyebrow">Films</p>
-        <div class="stat-num" id="ui-movie-count">0<span>本</span></div>
-      </div>
-      <div class="stat-label">これまでの映画</div>
     </section>
 
     <section class="tile tile-ai">
@@ -251,6 +262,7 @@
         <button class="chip is-on" data-kind="all">すべて</button>
         <button class="chip" data-kind="book">本</button>
         <button class="chip" data-kind="movie">映画</button>
+        <button class="chip" data-kind="anime">アニメ</button>
       </div>
       <div class="chips" id="filter-who" style="margin-top:8px"></div>
       <div class="chips" id="filter-sort" style="margin-top:8px">
@@ -286,6 +298,27 @@
         </div>
         <p class="field-hint">本棚に並ぶときの名前です。</p>
       </div>
+    </section>
+
+    <section class="tile tile-wide" id="shelf-settings" style="margin-top:14px">
+      <p class="eyebrow">自分の本棚</p>
+      <div class="field" style="margin-top:12px">
+        <label for="in-shelf-rename">本棚の名前</label>
+        <div class="link-box" style="background:none;padding:0;gap:9px">
+          <input type="text" id="in-shelf-rename" maxlength="40" style="flex:1">
+          <button class="btn btn-primary" id="btn-shelf-rename">変える</button>
+        </div>
+        <p class="field-hint">共有した相手にも、この名前で見えます。</p>
+      </div>
+    </section>
+
+    <section class="tile tile-wide" style="margin-top:14px">
+      <p class="eyebrow">見た目</p>
+      <h3 class="tile-title">色を選ぶ</h3>
+      <p class="field-hint" style="margin:-4px 0 14px">
+        この端末だけに効きます。他の人の画面は変わりません。
+      </p>
+      <div class="theme-grid" id="ui-theme-grid"></div>
     </section>
 
     <section class="tile tile-wide" style="margin-top:14px">
@@ -393,6 +426,7 @@
       <div class="seg" id="seg-kind">
         <button type="button" data-kind="book" class="is-on">本</button>
         <button type="button" data-kind="movie">映画</button>
+        <button type="button" data-kind="anime">アニメ</button>
       </div>
     </div>
 
@@ -478,10 +512,11 @@
 
     <div class="field">
       <label>ジャンル</label>
-      <div class="seg" id="seg-ai-kind">
-        <button type="button" data-aikind="both" class="is-on">どちらも</button>
-        <button type="button" data-aikind="book">本だけ</button>
-        <button type="button" data-aikind="movie">映画だけ</button>
+      <div class="seg seg-wrap" id="seg-ai-kind">
+        <button type="button" data-aikind="both" class="is-on">ぜんぶ</button>
+        <button type="button" data-aikind="book">本</button>
+        <button type="button" data-aikind="movie">映画</button>
+        <button type="button" data-aikind="anime">アニメ</button>
       </div>
     </div>
 
@@ -521,6 +556,6 @@
   </div>
 </div>
 
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
