@@ -17,9 +17,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=9">
+<link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
+
+<!-- ========== 読み込み中 ========== -->
+<div id="busy-veil" class="busy-veil hidden" aria-live="polite">
+  <div class="busy-card">
+    <div class="spinner"></div>
+    <p id="busy-msg">読み込んでいます…</p>
+  </div>
+</div>
 
 <!-- ========== ログイン ========== -->
 <div id="gate" class="gate hidden">
@@ -43,6 +51,12 @@
         </p>
       </div>
       <button class="btn btn-primary btn-block" id="btn-send-code">コードを送る</button>
+
+      <p class="gate-error hidden" id="gate-error-email"></p>
+      <p class="field-hint hidden" id="hint-goto-code" style="margin-top:10px">
+        コードは届いているのに進まないときは
+        <button class="linky" id="btn-goto-code">コード入力へ</button>
+      </p>
     </div>
 
     <!-- 2. コードを入れる -->
@@ -58,6 +72,8 @@
                maxlength="6" class="code-input" placeholder="000000">
       </div>
       <button class="btn btn-primary btn-block" id="btn-verify">ログイン</button>
+
+      <p class="gate-error hidden" id="gate-error-code"></p>
       <div class="btn-row" style="margin-top:9px">
         <button class="btn btn-line" id="btn-back-email">メールを変える</button>
         <button class="btn btn-line" id="btn-resend">もう一度送る</button>
@@ -505,6 +521,6 @@
   </div>
 </div>
 
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
