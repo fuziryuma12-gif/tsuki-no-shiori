@@ -112,6 +112,7 @@ async function api(action, payload) {
   if (!data.ok) {
     const e = new Error(data.error || '処理できませんでした。');
     e.authFailed = data.code === 'AUTH';
+    e.action = action;
     throw e;
   }
   return data;
@@ -189,12 +190,36 @@ async function copyText(text) {
 function baseUrl() { return location.origin + location.pathname; }
 
 /** ボタンを押している間だけ文言を差し替える。 */
+/** 画面全体に読み込み中を出す。通信の待ち時間を分かるようにする。 */
+function showBusy(msg) {
+  $('busy-msg').textContent = msg || '読み込んでいます…';
+  $('busy-veil').classList.remove('hidden');
+}
+
+function hideBusy() {
+  $('busy-veil').classList.add('hidden');
+}
+
+/** ログイン画面に、消えないエラーを出す。トーストだと見逃されるため。 */
+function gateError(which, msg) {
+  const el = $('gate-error-' + which);
+  if (!el) return;
+  if (msg) {
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  } else {
+    el.textContent = '';
+    el.classList.add('hidden');
+  }
+}
+
 async function busy(btn, label, fn) {
   const was = btn.textContent;
   btn.disabled = true;
   btn.textContent = label;
+  showBusy(label);
   try { return await fn(); }
-  finally { btn.disabled = false; btn.textContent = was; }
+  finally { btn.disabled = false; btn.textContent = was; hideBusy(); }
 }
 
 /* ============================================================
@@ -224,6 +249,7 @@ function parseHash() {
 }
 
 async function boot() {
+  showBusy('読み込んでいます…');
   const route = parseHash();
 
   if (!store.api) {
@@ -247,7 +273,7 @@ async function boot() {
     return;
   }
 
-  if (!store.token) { showGate('email'); return; }
+  if (!store.token) { hideBusy(); showGate('email'); return; }
 
   try {
     const d = await api('me', { token: store.token });
@@ -255,8 +281,9 @@ async function boot() {
     S.shelves = d.shelves;
   } catch (err) {
     store.token = '';
+    hideBusy();
     showGate('email');
-    if (!err.authFailed) toast(err.message);
+    if (!err.authFailed) gateError('email', err.message);
     return;
   }
 
@@ -298,6 +325,7 @@ async function afterLogin() {
 }
 
 function showGate(step) {
+  hideBusy();
   $('app').classList.add('hidden');
   $('gate').classList.remove('hidden');
   ['email', 'code', 'profile', 'invite'].forEach((s) => {
@@ -305,6 +333,7 @@ function showGate(step) {
   });
   if (step === 'code') setTimeout(() => $('in-code').focus(), 150);
   if (step === 'email') {
+    $('hint-goto-code').classList.add('hidden');
     // 前に使ったアドレスを入れておく（Safariは7日で保存が消えるため、
     // 入れ直しの手間をできるだけ減らす）
     if (!$('in-email').value && store.lastEmail) $('in-email').value = store.lastEmail;
@@ -331,17 +360,25 @@ async function sendCode(btn) {
     toast('メールアドレスを確かめてください');
     return;
   }
-  await busy(btn, '送っています…', async () => {
+  gateError('email', '');
+  await busy(btn, 'コードを送っています…', async () => {
     try {
       await api('requestCode', { email });
-      pendingEmail = email;
-      store.lastEmail = email;
-      $('ui-sent-to').textContent = email;
-      $('in-code').value = '';
-      showGate('code');
     } catch (err) {
-      toast(err.message);
+      // 何が起きたか画面に残す。トーストは数秒で消えて見逃されるため
+      gateError('email', err.message);
+      // 送信自体は通っていることがあるので、手で進める道を出しておく
+      pendingEmail = email;
+      $('hint-goto-code').classList.remove('hidden');
+      return;
     }
+    // 送信が通ったら、必ずコード入力へ進む
+    pendingEmail = email;
+    store.lastEmail = email;
+    $('ui-sent-to').textContent = email;
+    $('in-code').value = '';
+    gateError('code', '');
+    showGate('code');
   });
 }
 
@@ -349,17 +386,23 @@ async function verifyCode(btn) {
   const code = $('in-code').value.replace(/\D/g, '');
   if (code.length !== 6) { toast('6桁のコードを入力してください'); return; }
 
-  await busy(btn, '確認しています…', async () => {
+  gateError('code', '');
+  await busy(btn, 'ログインしています…', async () => {
+    let d;
     try {
-      const d = await api('verifyCode', { email: pendingEmail, code });
-      store.token = d.token;
-      S.user = d.user;
-      S.shelves = d.shelves;
-      $('in-code').value = '';
-      await afterLogin();
+      d = await api('verifyCode', { email: pendingEmail, code });
     } catch (err) {
-      toast(err.message);
+      gateError('code', err.message);
+      $('in-code').value = '';
+      $('in-code').focus();
+      return;
     }
+    store.token = d.token;
+    S.user = d.user;
+    S.shelves = d.shelves;
+    $('in-code').value = '';
+    showBusy('本棚を開いています…');
+    await afterLogin();
   });
 }
 
@@ -405,6 +448,8 @@ async function logout() {
    ========================================================== */
 
 async function openShelf(shelfId) {
+  const quiet = !!S.shelf;   // 2回目以降は画面が残っているので静かに
+  if (!quiet) showBusy('本棚を開いています…');
   try {
     const d = await api('getShelf', { shelfId, token: store.token });
     S.canEdit = d.canEdit;
@@ -436,6 +481,8 @@ async function openShelf(shelfId) {
   } catch (err) {
     toast(err.message);
     if (!store.token) showGate('email');
+  } finally {
+    hideBusy();
   }
 }
 
@@ -1343,6 +1390,11 @@ function wireUp() {
     sendCode(ev.currentTarget);
   });
   $('btn-back-email').addEventListener('click', () => showGate('email'));
+  $('btn-goto-code').addEventListener('click', () => {
+    $('ui-sent-to').textContent = pendingEmail || $('in-email').value.trim();
+    gateError('code', '');
+    showGate('code');
+  });
   $('btn-start').addEventListener('click', (ev) => finishProfile(ev.currentTarget));
   $('btn-invite-login').addEventListener('click', () => showGate('email'));
 
