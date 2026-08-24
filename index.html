@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 
@@ -76,7 +76,7 @@
       </p>
       <div class="field">
         <label for="in-display-name">呼び名</label>
-        <input type="text" id="in-display-name" maxlength="20" placeholder="りゅうま">
+        <input type="text" id="in-display-name" maxlength="20" placeholder="呼ばれたい名前">
       </div>
       <div class="field" id="field-first-shelf">
         <label for="in-first-shelf">最初の本棚の名前</label>
@@ -394,6 +394,10 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<!--
+  ?v=… はキャッシュ避け。app.js や styles.css を直したら、
+  この数字を上げてから push すること。上げないと、しばらく古いファイルが配られる。
+-->
+<script src="app.js?v=3"></script>
 </body>
 </html>
