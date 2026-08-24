@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 
@@ -117,9 +117,7 @@
     </button>
   </header>
 
-  <div id="readonly-note" class="readonly-note hidden">
-    共有された本棚を見ています。記録の追加はできません。
-  </div>
+  <div id="readonly-note" class="readonly-note hidden"></div>
 
   <!-- ---- ホーム ---- -->
   <main id="view-home" class="bento">
@@ -135,6 +133,9 @@
       <div class="now-empty hidden" id="ui-now-empty">
         まだ今月のしおりは白紙です。<br>読み終えた一冊から挟んでみてください。
       </div>
+      <button class="btn btn-primary btn-block" id="btn-add" style="margin-top:16px">
+        ＋ 記録する
+      </button>
     </section>
 
     <section class="tile tile-stat">
@@ -166,6 +167,9 @@
       <p class="eyebrow">Recent</p>
       <h3 class="tile-title">最近のしおり</h3>
       <ul class="rec-list" id="ui-recent-list"></ul>
+      <button class="btn btn-quiet btn-block" id="btn-see-all" style="margin-top:14px">
+        すべて見る
+      </button>
     </section>
 
     <section class="tile tile-share">
@@ -206,10 +210,90 @@
     <div id="ui-recs-body"></div>
   </main>
 
+  <!-- ---- みんな（招待でつながった人の本棚） ---- -->
+  <main id="view-people" class="hidden">
+    <div class="view-head">
+      <p class="eyebrow">Shelves</p>
+      <h2>みんなの本棚</h2>
+    </div>
+    <div id="ui-people-body"></div>
+  </main>
+
+  <!-- ---- 一覧 ---- -->
+  <main id="view-all" class="hidden">
+    <div class="view-head">
+      <p class="eyebrow">Library</p>
+      <h2>この本棚のすべて</h2>
+    </div>
+
+    <div class="tile tile-wide filter-box">
+      <div class="field" style="margin-bottom:12px">
+        <input type="search" id="in-search" placeholder="タイトル・著者・ひとことで探す"
+               autocomplete="off" spellcheck="false">
+      </div>
+      <div class="chips" id="filter-kind">
+        <button class="chip is-on" data-kind="all">すべて</button>
+        <button class="chip" data-kind="book">本</button>
+        <button class="chip" data-kind="movie">映画</button>
+      </div>
+      <div class="chips" id="filter-who" style="margin-top:8px"></div>
+      <div class="chips" id="filter-sort" style="margin-top:8px">
+        <button class="chip is-on" data-sort="new">新しい順</button>
+        <button class="chip" data-sort="old">古い順</button>
+        <button class="chip" data-sort="rating">評価が高い順</button>
+        <button class="chip" data-sort="title">タイトル順</button>
+      </div>
+      <p class="filter-count" id="ui-all-count"></p>
+    </div>
+
+    <div class="tile tile-wide" style="margin-top:14px">
+      <ul class="rec-list" id="ui-all-list"></ul>
+    </div>
+  </main>
+
+  <!-- ---- はなす ---- -->
+  <main id="view-chat" class="hidden">
+    <div class="view-head">
+      <p class="eyebrow">Talk</p>
+      <h2>この本棚で話す</h2>
+    </div>
+
+    <div class="chat-log" id="ui-chat-log"></div>
+
+    <div class="chat-compose">
+      <div class="quote-chip hidden" id="ui-quote">
+        <span class="kind-chip" id="ui-quote-kind">本</span>
+        <span class="quote-body">
+          <b id="ui-quote-title">—</b>
+          <i id="ui-quote-creator"></i>
+        </span>
+        <button class="quote-x" id="btn-quote-clear" aria-label="引用をやめる">×</button>
+      </div>
+      <div class="chat-input-row">
+        <textarea id="in-chat" rows="1" maxlength="1000"
+                  placeholder="この本持ってるよ、など"></textarea>
+        <button class="btn btn-primary chat-send" id="btn-chat-send">送る</button>
+      </div>
+    </div>
+  </main>
+
   <nav class="dock" id="dock">
-    <button data-nav="home" class="is-on">ホーム</button>
-    <button data-nav="recs">おすすめ</button>
-    <button class="dock-add" id="btn-add">＋ 記録する</button>
+    <button data-nav="home" class="is-on">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3h3v14H4zM8.5 3h3v14h-3zM13.6 3.4l2.9.8-3.6 13.5-2.9-.8z"/></svg>
+      <span>本棚</span>
+    </button>
+    <button data-nav="people" id="btn-nav-people">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7 0a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM1 17c0-3.3 2.7-6 6-6s6 2.7 6 6H1zm13.2 0c0-1.9-.7-3.7-1.9-5 .5-.2 1.1-.3 1.7-.3 2.8 0 5 2.2 5 5.3h-4.8z"/></svg>
+      <span>みんな</span><span class="dot hidden" id="ui-people-dot"></span>
+    </button>
+    <button data-nav="recs">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.6l2.2 5 5.4.5-4.1 3.6 1.2 5.3-4.7-2.8-4.7 2.8 1.2-5.3L2.4 7.1l5.4-.5z"/></svg>
+      <span>おすすめ</span>
+    </button>
+    <button data-nav="chat" id="btn-nav-chat">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c4.4 0 8 2.9 8 6.5S14.4 15 10 15c-.9 0-1.8-.1-2.6-.4L3 16.5l1.2-3A6.7 6.7 0 0 1 2 8.5C2 4.9 5.6 2 10 2z"/></svg>
+      <span>はなす</span><span class="dot hidden" id="ui-unread-dot"></span>
+    </button>
   </nav>
 
 </div>
@@ -286,6 +370,11 @@
     <h2 id="share-heading">この本棚を共有する</h2>
 
     <div class="field">
+      <label>この本棚の人</label>
+      <div id="ui-member-admin"></div>
+    </div>
+
+    <div class="field" style="margin-top:22px">
       <label>友人を招く</label>
       <p class="field-hint" style="margin:0 0 4px">
         リンクを開いた人はログインしたうえで、この本棚に参加します。
@@ -371,18 +460,8 @@
       <hr class="rule">
     </div>
 
-    <div class="field">
-      <label for="in-api">GAS のウェブアプリ URL</label>
-      <input type="text" id="in-api" placeholder="https://script.google.com/macros/s/.../exec">
-      <p class="field-hint">
-        Apps Script を「ウェブアプリとしてデプロイ」したときに出るURLです。<br>
-        この端末にだけ保存されます。
-      </p>
-    </div>
-
     <div class="btn-row">
-      <button class="btn btn-line" id="btn-set-close">閉じる</button>
-      <button class="btn btn-primary" id="btn-set-save">保存する</button>
+      <button class="btn btn-line btn-block" id="btn-set-close">閉じる</button>
     </div>
 
     <button class="btn btn-line btn-danger btn-block hidden" id="btn-logout" style="margin-top:22px">
@@ -391,6 +470,17 @@
     <p class="field-hint hidden" id="logout-hint">
       この端末からログアウトします。記録は残るので、同じメールでログインし直せば元に戻ります。
     </p>
+
+    <div id="danger-zone" class="hidden">
+      <hr class="rule">
+      <p class="eyebrow">Danger</p>
+      <button class="btn btn-line btn-danger btn-block" id="btn-delete-open">
+        アカウントを削除する
+      </button>
+      <p class="field-hint">
+        アカウントと、あなたが書いた記録をすべて消します。元には戻せません。
+      </p>
+    </div>
   </div>
 </div>
 
@@ -398,6 +488,26 @@
   ?v=… はキャッシュ避け。app.js や styles.css を直したら、
   この数字を上げてから push すること。上げないと、しばらく古いファイルが配られる。
 -->
-<script src="app.js?v=3"></script>
+<!-- ========== アカウント削除 ========== -->
+<div id="sheet-delete" class="veil hidden">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="del-heading">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <h2 id="del-heading">アカウントを削除する</h2>
+
+    <div id="ui-delete-summary"></div>
+
+    <div class="field" style="margin-top:18px">
+      <label for="in-delete-confirm">確認のため「削除」と入力してください</label>
+      <input type="text" id="in-delete-confirm" autocomplete="off" placeholder="削除">
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-line" id="btn-delete-cancel">やめる</button>
+      <button class="btn btn-danger-solid" id="btn-delete-go" disabled>完全に削除する</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=6"></script>
 </body>
 </html>
