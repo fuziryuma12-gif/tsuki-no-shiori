@@ -398,7 +398,8 @@ input, select, textarea { font: inherit; color: inherit; }
   transform: translateY(-1px);
 }
 
-.kind-chip.is-movie { background: var(--petal); color: #6E2740; }
+.kind-chip.is-movie { background: var(--petal); color: var(--rouge-deep); }
+.kind-chip.is-anime { background: var(--blush-deep); color: var(--rouge-deep); border: 1px solid var(--petal); }
 
 .rec-body { flex: 1; min-width: 0; }
 
@@ -1549,4 +1550,126 @@ input, select, textarea { font: inherit; color: inherit; }
   text-align: center;
   letter-spacing: .04em;
   margin: 4px 0 0;
+}
+
+/* ============================================================
+   色のセット
+   ============================================================
+   :root の値を上書きするだけで全体が変わる。
+   どれを選んでも、地と文字のコントラストが崩れないようにしてある。
+   ========================================================== */
+
+/* さくら（既定） */
+[data-theme="sakura"] {
+  --blush: #FBE4EA; --blush-deep: #F5CFD9; --petal: #F0B4C5;
+  --paper: #FFFFFF; --paper-warm: #FFFAFB;
+  --ink: #33232A; --mist: #9C8791;
+  --rouge: #B85572; --rouge-deep: #8B3B54;
+}
+
+/* わかば */
+[data-theme="wakaba"] {
+  --blush: #E3EFE2; --blush-deep: #CCE0CB; --petal: #A8CBA6;
+  --paper: #FFFFFF; --paper-warm: #FAFDF9;
+  --ink: #242E24; --mist: #859584;
+  --rouge: #4E7C4B; --rouge-deep: #365938;
+}
+
+/* あさぎ */
+[data-theme="asagi"] {
+  --blush: #E0EBF2; --blush-deep: #C7DBE7; --petal: #9EC3D8;
+  --paper: #FFFFFF; --paper-warm: #F9FCFD;
+  --ink: #1F2A33; --mist: #7F909C;
+  --rouge: #3D6E8E; --rouge-deep: #274F69;
+}
+
+/* こはく */
+[data-theme="kohaku"] {
+  --blush: #F6E8D8; --blush-deep: #EBD5BC; --petal: #DEB98F;
+  --paper: #FFFFFF; --paper-warm: #FFFCF8;
+  --ink: #33271B; --mist: #9C8A75;
+  --rouge: #9E6A35; --rouge-deep: #754B22;
+}
+
+/* ふじ */
+[data-theme="fuji"] {
+  --blush: #E9E5F3; --blush-deep: #D6CFE8; --petal: #B7ABD6;
+  --paper: #FFFFFF; --paper-warm: #FCFBFE;
+  --ink: #2A2434; --mist: #8E86A0;
+  --rouge: #6B5896; --rouge-deep: #4C3C74;
+}
+
+/* すみ（落ち着いた無彩色） */
+[data-theme="sumi"] {
+  --blush: #ECE9E6; --blush-deep: #DBD6D1; --petal: #BDB6AE;
+  --paper: #FFFFFF; --paper-warm: #FDFCFB;
+  --ink: #262421; --mist: #8C8781;
+  --rouge: #57524C; --rouge-deep: #38342F;
+}
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.theme-card {
+  border: 2px solid var(--blush-deep);
+  background: var(--paper-warm);
+  border-radius: var(--r-md);
+  padding: 12px 8px 10px;
+  transition: border-color .16s ease, transform .16s ease;
+}
+
+.theme-card:active { transform: scale(.97); }
+.theme-card.is-on { border-color: var(--rouge); }
+
+.theme-swatch {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.theme-swatch i {
+  width: 15px;
+  height: 24px;
+  border-radius: 4px;
+  display: block;
+}
+
+.theme-swatch i:nth-child(2) {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 5px), 0 100%);
+  border-radius: 3px 3px 0 0;
+}
+
+.theme-card span {
+  display: block;
+  font-size: 11.5px;
+  letter-spacing: .05em;
+  color: var(--ink);
+}
+
+/* ---------- 3つ並ぶ数のタイル ---------- */
+
+.stat-row { display: flex; gap: 6px; }
+
+.stat-cell {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.stat-cell .eyebrow { margin-bottom: 4px; }
+.stat-cell .stat-num { font-size: 30px; }
+.stat-cell .stat-num span { font-size: 12px; }
+.stat-cell .stat-label { margin-top: 5px; font-size: 11px; }
+
+/* 種類が増えたので、選択肢は折り返す */
+.seg-wrap { flex-wrap: wrap; }
+.seg-wrap button { flex: 1 1 calc(50% - 4px); }
+
+@media (min-width: 720px) {
+  .seg-wrap button { flex: 1; }
+  .theme-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
