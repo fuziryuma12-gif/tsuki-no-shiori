@@ -8,13 +8,13 @@
      古い一覧を見せてしまうより、つながらないと分かる方がよい。
    ========================================================== */
 
-const CACHE = 'shiori-v8';
+const CACHE = 'shiori-v9';
 
 const SHELL = [
   './',
   './index.html',
-  './styles.css?v=8',
-  './app.js?v=8',
+  './styles.css?v=9',
+  './app.js?v=9',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png'
