@@ -87,7 +87,7 @@ const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
 
 async function api(action, payload) {
   if (!store.api) {
-    throw new Error('GAS のウェブアプリ URL がまだ設定されていません。');
+    throw new Error('接続先が設定されていません。管理者にお知らせください。');
   }
   let res;
   try {
@@ -99,14 +99,14 @@ async function api(action, payload) {
       redirect: 'follow'
     });
   } catch (err) {
-    throw new Error('サーバーにつながりませんでした。通信環境とURLを確かめてください。');
+    throw new Error('サーバーにつながりませんでした。通信環境を確かめてください。');
   }
 
   let data;
   try {
     data = await res.json();
   } catch (err) {
-    throw new Error('サーバーの返答を読み取れませんでした。デプロイのアクセス権が「全員」になっているか確かめてください。');
+    throw new Error('サーバーの返答を読み取れませんでした。時間をおいてお試しください。');
   }
 
   if (!data.ok) {
@@ -230,7 +230,7 @@ async function boot() {
     // 通常は app.js の DEFAULT_API が入っているので、ここに来るのは設定漏れのとき
     document.body.innerHTML =
       '<div style="padding:44px 24px;font-family:sans-serif;line-height:2;color:#33232A">' +
-      'app.js の <code>DEFAULT_API</code> に、GAS のウェブアプリ URL を入れてください。</div>';
+      '設定が完了していません。管理者にお知らせください。</div>';
     return;
   }
 
@@ -273,14 +273,16 @@ async function afterLogin() {
     try {
       const d = await authed('joinShelf', pending);
       S.shelves = d.shelves;
-      store.lastShelf = d.shelfId;
-      toast(d.alreadyMember ? 'すでに参加している本棚です' : `「${d.name}」に参加しました`);
+      // 着地するのは自分の本棚。招かれた本棚は「みんな」に並ぶ
+      toast(d.alreadyMember
+        ? `「${d.name}」は「みんな」から見られます`
+        : `「${d.name}」が「みんな」に加わりました`);
     } catch (err) {
       toast(err.message);
     }
   }
 
-  if (!S.shelves.length) {
+  if (!S.shelves.some((s) => s.isMine)) {
     // 本棚がないアカウント（招待に失敗したときなど）。1つ用意する。
     try {
       const d = await authed('createShelf', { name: '' });
@@ -289,11 +291,9 @@ async function afterLogin() {
     } catch (err) { toast(err.message); showGate('email'); return; }
   }
 
-  const target = S.shelves.some((s) => s.shelfId === store.lastShelf)
-    ? store.lastShelf
-    : S.shelves[0].shelfId;
-
-  await openShelf(target);
+  // 1人1つの本棚。開くのは常に自分のもの。
+  const mine = S.shelves.find((s) => s.isMine);
+  await openShelf(mine ? mine.shelfId : S.shelves[0].shelfId);
   checkUnread();
   startUnreadPolling();
 }
@@ -312,9 +312,12 @@ function showGate(step) {
     setTimeout(() => $('in-email').focus(), 150);
   }
   if (step === 'profile') {
-    // 招待から来た人は、これから他人の本棚に入るので自分の本棚は要らない
-    const joining = !!store.pendingJoin || S.shelves.length > 0;
-    $('field-first-shelf').classList.toggle('hidden', joining);
+    // 1人1つの本棚。招待から来た人にも、自分の本棚をつくってもらう
+    const hasOwn = S.shelves.some((x) => x.isMine);
+    $('field-first-shelf').classList.toggle('hidden', hasOwn);
+    // 前の人の入力が残らないよう、毎回いまのユーザーから決め直す
+    $('in-display-name').value = S.user?.displayName || S.user?.suggestedName || '';
+    $('in-first-shelf').value = '';
     setTimeout(() => $('in-display-name').focus(), 150);
   }
 }
@@ -370,7 +373,7 @@ async function finishProfile(btn) {
       const p = await authed('setProfile', { displayName: name });
       S.user = p.user;
 
-      if (!S.shelves.length && !store.pendingJoin) {
+      if (!S.shelves.some((x) => x.isMine)) {
         const shelfName = $('in-first-shelf').value.trim();
         const d = await authed('createShelf', { name: shelfName });
         S.shelves = d.shelves;
@@ -443,11 +446,11 @@ function renderAll() {
 
   // 読むだけの人には、なぜ書けないのかを出す
   const note = $('readonly-note');
-  if (!S.canEdit) {
-    note.textContent = '共有された本棚を見ています。記録の追加はできません。';
-    note.classList.remove('hidden');
-  } else if (!S.canWrite) {
-    note.textContent = 'この本棚では読むだけです。会話には参加できます。';
+  const owner = S.members.find((m) => m.role === 'owner');
+  if (!S.canWrite) {
+    note.textContent = owner
+      ? `${owner.displayName}さんの本棚です。回覧板にコメントを残せます。`
+      : '共有された本棚を見ています。記録の追加はできません。';
     note.classList.remove('hidden');
   } else {
     note.classList.add('hidden');
@@ -456,10 +459,10 @@ function renderAll() {
   $('btn-add').classList.toggle('hidden', !S.canWrite);
   $('btn-share-open').classList.toggle('hidden', !(S.shelf && S.shelf.isOwner));
   $('btn-ai-open').classList.toggle('hidden', !S.canEdit);
-  $('btn-nav-chat').classList.toggle('hidden', !S.canEdit);
   $('btn-nav-people').classList.toggle('hidden', !S.user);
   $('btn-see-all').classList.toggle('hidden', S.entries.length === 0);
 
+  renderBoardTile();
   renderNow();
   renderCounts();
   renderRecent();
@@ -521,7 +524,7 @@ function entryRow(e, withMonth) {
     </span>
     ${e.rating ? `<span class="stars">${stars(e.rating)}</span>` : ''}
     ${S.canEdit && S.members.length > 1
-      ? `<button class="row-talk" data-talk='${esc(JSON.stringify({ type: 'entry', id: e.entryId, kind: e.kind, title: e.title, creator: e.creator }))}'>話す</button>`
+      ? `<button class="row-talk" data-talk='${esc(JSON.stringify({ type: 'entry', id: e.entryId, kind: e.kind, title: e.title, creator: e.creator }))}'>コメント</button>`
       : ''}
     ${S.canWrite && mine ? `<button class="row-edit" data-edit="${esc(e.entryId)}">直す</button>` : ''}
   </li>`;
@@ -606,7 +609,7 @@ function sugCard(it, recId) {
     <span class="sug-mood">${esc(it.mood || '')}</span>
     <div class="btn-row" style="margin-top:12px">
       ${S.canEdit && S.members.length > 1
-        ? `<button class="btn btn-line" data-talk='${esc(JSON.stringify({ type: 'rec', id: recId, kind: it.kind, title: it.title, creator: it.creator }))}'>これについて話す</button>`
+        ? `<button class="btn btn-line" data-talk='${esc(JSON.stringify({ type: 'rec', id: recId, kind: it.kind, title: it.title, creator: it.creator }))}'>これにコメント</button>`
         : ''}
       <button class="btn btn-line"
         data-share-one='${esc(JSON.stringify({ t: it.title, c: it.creator, r: it.reason }))}'>共有する</button>
@@ -703,6 +706,10 @@ function mergeMessages(list) {
 }
 
 async function openChat() {
+  const owner = S.members.find((m) => m.role === 'owner');
+  $('ui-board-title').textContent = (owner && !S.shelf.isOwner)
+    ? `${owner.displayName}さんの本棚の回覧板`
+    : 'この本棚の回覧板';
   showView('chat');
   if (!messages.length) {
     $('ui-chat-log').innerHTML = '<div class="spinner"></div>';
@@ -809,24 +816,20 @@ async function talkAbout(ref) {
 
 /* ---------- 未読の赤い印 ---------- */
 
+/**
+ * 未読の見せ方は立場で違う。
+ *   自分の本棚（オーナー）… ホームのコメントタイルに印
+ *   共有された本棚（見る人）… 「みんな」の一覧に「コメント◯件」
+ */
 function renderUnread() {
-  const n = unreadByShelf[S.shelf?.shelfId] || 0;
-  $('ui-unread-dot').classList.toggle('hidden', n === 0);
-  $('btn-nav-chat').classList.toggle('has-unread', n > 0);
+  if (S.shelf) renderBoardTile();
 
-  // 他の本棚に未読があれば、切り替えボタンにも印を出す
-  const other = Object.keys(unreadByShelf)
-    .filter((k) => k !== S.shelf?.shelfId)
-    .reduce((a, k) => a + (unreadByShelf[k] || 0), 0);
-  const name = $('ui-shelf-name');
-  const existing = name.querySelector('.dot');
-  if (other > 0 && !existing) {
-    const d = document.createElement('span');
-    d.className = 'dot';
-    name.appendChild(d);
-  } else if (other === 0 && existing) {
-    existing.remove();
-  }
+  // 共有された本棚に未読があれば「みんな」タブにも印を出す
+  const others = S.shelves.filter((x) => !x.isMine)
+    .reduce((a, x) => a + (unreadByShelf[x.shelfId] || 0), 0);
+  $('ui-people-dot').classList.toggle('hidden', others === 0);
+
+  if (!$('view-people').classList.contains('hidden')) renderPeople();
 }
 
 /** 赤い印だけを軽く確認する。会話画面を見ていないときの巡回。 */
@@ -843,7 +846,7 @@ function startUnreadPolling() {
   if (unreadTimer) clearInterval(unreadTimer);
   unreadTimer = setInterval(() => {
     if (document.hidden) return;
-    if (!$('view-chat').classList.contains('hidden')) return; // 会話中は不要
+    if (!$('view-chat').classList.contains('hidden')) return; // 回覧板を見ている間は不要
     checkUnread();
   }, 60000);
 }
@@ -928,18 +931,15 @@ function renderAllList() {
    ========================================================== */
 
 function roleLabel(role) {
-  return role === 'owner' ? 'つくった人'
-       : role === 'viewer' ? '見るだけ'
-       : '書き込みOK';
+  return role === 'owner' ? '自分の本棚' : '見るだけ';
 }
 
 function shelfCard(s) {
   const on = S.shelf && s.shelfId === S.shelf.shelfId;
+  const unread = unreadByShelf[s.shelfId] || 0;
   const sub = [
-    s.entryCount + '件',
-    s.memberCount > 1 ? s.memberCount + '人' : null,
-    s.isMine ? null : (s.ownerName ? s.ownerName + 'の本棚' : null),
-    s.isPublic ? '公開中' : null
+    s.ownerName ? s.ownerName + 'さん' : null,
+    s.entryCount + '件の記録'
   ].filter(Boolean).join(' ・ ');
 
   return `<button class="shelf-card${on ? ' is-on' : ''}" data-shelf="${esc(s.shelfId)}">
@@ -948,47 +948,55 @@ function shelfCard(s) {
       <b>${esc(s.name)}</b>
       <span>${esc(sub)}</span>
     </span>
-    ${s.isMine ? '' : `<span class="role-tag">${esc(roleLabel(s.role))}</span>`}
+    ${unread ? `<span class="role-tag is-unread">コメント${unread}件</span>` : ''}
   </button>`;
 }
 
 function renderPeople() {
-  const mine = S.shelves.filter((s) => s.isMine);
   const others = S.shelves.filter((s) => !s.isMine);
 
-  let html = '';
-
-  if (others.length) {
-    html += '<div class="people-group"><p class="eyebrow">招かれた本棚</p>' +
-      others.map(shelfCard).join('') + '</div>';
-  } else {
-    html += `<div class="blank" style="margin-bottom:26px">
-      <p>まだ誰ともつながっていません。<br>
-      友人に招待リンクをもらうと、その人の本棚がここに並びます。</p>
-    </div>`;
-  }
-
-  html += '<div class="people-group"><p class="eyebrow">自分の本棚</p>' +
-    mine.map(shelfCard).join('') +
-    `<div class="field" style="margin-top:14px">
-       <label for="in-new-shelf2">新しい本棚をつくる</label>
-       <input type="text" id="in-new-shelf2" maxlength="40" placeholder="2027年の記録">
-     </div>
-     <button class="btn btn-quiet btn-block" id="btn-new-shelf2">つくる</button>
-     </div>`;
-
-  $('ui-people-body').innerHTML = html;
-
-  const btn = $('btn-new-shelf2');
-  if (btn) btn.addEventListener('click', (ev) => createNewShelf(ev.currentTarget, 'in-new-shelf2'));
+  $('ui-people-body').innerHTML = others.length
+    ? others.map(shelfCard).join('')
+    : `<div class="blank">
+        <p>まだ共有されている本棚はありません。<br>
+        友人に招待リンクをもらうと、その人の本棚がここに並びます。</p>
+      </div>`;
 }
 
 /* ============================================================
    画面の切り替え
    ========================================================== */
 
+
+/** ホームのコメントタイル。件数と未読を出す。 */
+function renderBoardTile() {
+  const n = messages.length;
+  const unread = unreadByShelf[S.shelf.shelfId] || 0;
+  const solo = S.members.length < 2;
+
+  const lede = solo
+    ? '共有すると、見た人がここにコメントを残せます。'
+    : unread ? `新しいコメントが${unread}件あります。`
+    : n ? `これまでに${n}件のコメント。`
+    : 'まだコメントはありません。';
+
+  $('ui-board-lede').textContent = lede;
+  $('ui-unread-dot').classList.toggle('hidden', unread === 0);
+  $('btn-open-board').textContent = unread ? `コメントを読む（${unread}）` : '回覧板をひらく';
+}
+
+/** 「本棚」タブ。他の人の本棚を見ていたら、自分のものに戻す。 */
+async function goHome() {
+  const mine = S.shelves.find((x) => x.isMine);
+  if (mine && (!S.shelf || S.shelf.shelfId !== mine.shelfId)) {
+    await openShelf(mine.shelfId);
+  } else {
+    showView('home');
+  }
+}
+
 function showView(name) {
-  ['home', 'month', 'recs', 'chat', 'all', 'people'].forEach((v) => {
+  ['home', 'month', 'recs', 'chat', 'all', 'people', 'account'].forEach((v) => {
     $('view-' + v).classList.toggle('hidden', v !== name);
   });
   if (name !== 'chat') stopChatPolling();
@@ -1181,32 +1189,15 @@ function renderMemberAdmin() {
   box.innerHTML = S.members.map((m) => {
     const me = S.user && m.userId === S.user.userId;
     const owner = m.role === 'owner';
-    const showRole = S.shelf.isOwner && !owner && !me;
-
-    return `<div class="member-row${showRole ? ' is-stack' : ''}">
+    return `<div class="member-row">
       <b>${esc(m.displayName)}</b>
-      ${owner ? '<span class="member-tag">つくった人</span>' : ''}
+      ${owner ? '<span class="member-tag">つくった人</span>' : '<span class="member-tag">見ている人</span>'}
       ${me ? '<span class="member-tag">あなた</span>' : ''}
-      ${!S.shelf.isOwner && !owner ? `<span class="member-tag">${esc(roleLabel(m.role))}</span>` : ''}
       ${canKick && !me
         ? `<button class="member-kick" data-kick="${esc(m.userId)}" data-kickname="${esc(m.displayName)}">外す</button>`
         : ''}
-      ${showRole ? `<div class="role-seg">
-        <button class="${m.role === 'viewer' ? 'is-on' : ''}" data-role="viewer" data-ruser="${esc(m.userId)}">見るだけ</button>
-        <button class="${m.role !== 'viewer' ? 'is-on' : ''}" data-role="editor" data-ruser="${esc(m.userId)}">書き込みOK</button>
-      </div>` : ''}
     </div>`;
   }).join('');
-}
-
-async function setMemberRole(userId, role) {
-  try {
-    await authed('setMemberRole', { shelfId: S.shelf.shelfId, userId, role });
-    const m = S.members.find((x) => x.userId === userId);
-    if (m) m.role = role;
-    renderMemberAdmin();
-    toast(role === 'viewer' ? '見るだけにしました' : '書き込みできるようにしました');
-  } catch (err) { toast(err.message); }
 }
 
 async function kickMember(userId, name) {
@@ -1229,10 +1220,12 @@ async function kickMember(userId, name) {
    アカウント削除
    ========================================================== */
 
+let deleteArmed = false;
+
 async function openDeleteAccount() {
-  closeSheet('sheet-settings');
-  $('in-delete-confirm').value = '';
-  $('btn-delete-go').disabled = true;
+  deleteArmed = false;
+  $('btn-delete-go').textContent = '削除する';
+  $('ui-delete-step').textContent = '押すともう一度確認します。';
   $('ui-delete-summary').innerHTML = '<div class="spinner"></div>';
   openSheet('sheet-delete');
 
@@ -1263,9 +1256,17 @@ async function openDeleteAccount() {
 }
 
 async function deleteAccount(btn) {
+  // 一度目は身構えるだけ。二度目で実行する。
+  if (!deleteArmed) {
+    deleteArmed = true;
+    btn.textContent = '本当に削除する';
+    $('ui-delete-step').textContent = 'これが最後の確認です。もう一度押すと消えます。';
+    return;
+  }
+
   await busy(btn, '削除しています…', async () => {
     try {
-      await authed('deleteAccount', { confirm: $('in-delete-confirm').value.trim() });
+      await authed('deleteAccount', { confirm: '削除' });
       store.token = '';
       store.lastShelf = '';
       store.pendingJoin = null;
@@ -1286,18 +1287,13 @@ async function deleteAccount(btn) {
    設定
    ========================================================== */
 
-function openSettings() {
-  const loggedIn = !!(store.token && S.user);
-  $('account-box').classList.toggle('hidden', !loggedIn);
-  $('btn-logout').classList.toggle('hidden', !loggedIn);
-  $('logout-hint').classList.toggle('hidden', !loggedIn);
-  $('danger-zone').classList.toggle('hidden', !loggedIn);
-  if (loggedIn) {
+function openAccount() {
+  if (S.user) {
     $('ui-my-name').textContent = S.user.displayName || '（未設定）';
     $('ui-my-email').textContent = S.user.email;
     $('in-rename').value = S.user.displayName || '';
   }
-  openSheet('sheet-settings');
+  showView('account');
 }
 
 async function renameMe(btn) {
@@ -1329,7 +1325,6 @@ function wireUp() {
   $('btn-back-email').addEventListener('click', () => showGate('email'));
   $('btn-start').addEventListener('click', (ev) => finishProfile(ev.currentTarget));
   $('btn-invite-login').addEventListener('click', () => showGate('email'));
-  $('btn-gate-settings').addEventListener('click', openSettings);
 
   $('in-email').addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') $('btn-send-code').click();
@@ -1398,8 +1393,6 @@ function wireUp() {
   });
 
   /* --- 設定 --- */
-  $('btn-settings').addEventListener('click', openSettings);
-  $('btn-set-close').addEventListener('click', () => closeSheet('sheet-settings'));
   $('btn-rename-me').addEventListener('click', (ev) => renameMe(ev.currentTarget));
   $('btn-logout').addEventListener('click', logout);
 
@@ -1440,12 +1433,11 @@ function wireUp() {
   /* --- アカウント削除 --- */
   $('btn-delete-open').addEventListener('click', openDeleteAccount);
   $('btn-delete-cancel').addEventListener('click', () => closeSheet('sheet-delete'));
-  $('in-delete-confirm').addEventListener('input', (ev) => {
-    $('btn-delete-go').disabled = ev.target.value.trim() !== '削除';
-  });
   $('btn-delete-go').addEventListener('click', (ev) => deleteAccount(ev.currentTarget));
 
   /* --- はなす --- */
+  $('btn-open-board').addEventListener('click', openChat);
+  $('btn-board-back').addEventListener('click', () => showView('home'));
   $('btn-chat-send').addEventListener('click', (ev) => sendMessage(ev.currentTarget));
   $('btn-quote-clear').addEventListener('click', clearQuote);
   $('in-chat').addEventListener('input', (ev) => autoGrow(ev.target));
@@ -1475,8 +1467,9 @@ function wireUp() {
     const b = ev.target.closest('button[data-nav]');
     if (!b) return;
     location.hash = '';
-    if (b.dataset.nav === 'chat') openChat();
-    else if (b.dataset.nav === 'people') { renderPeople(); showView('people'); }
+    if (b.dataset.nav === 'people') { renderPeople(); showView('people'); }
+    else if (b.dataset.nav === 'account') openAccount();
+    else if (b.dataset.nav === 'home') goHome();
     else showView(b.dataset.nav);
   });
 
@@ -1488,14 +1481,9 @@ function wireUp() {
   document.addEventListener('click', (ev) => {
     const shelfBtn = ev.target.closest('[data-shelf]');
     if (shelfBtn) {
-      closeSheet('sheet-shelves');
+      // すでに開いている本棚でも、押したら画面は移す
       if (shelfBtn.dataset.shelf !== S.shelf.shelfId) openShelf(shelfBtn.dataset.shelf);
-      return;
-    }
-
-    const roleBtn = ev.target.closest('[data-role]');
-    if (roleBtn) {
-      setMemberRole(roleBtn.dataset.ruser, roleBtn.dataset.role);
+      else showView('home');
       return;
     }
 
