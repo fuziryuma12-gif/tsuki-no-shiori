@@ -11,8 +11,12 @@
 const KINDS = [
   { id: 'book',  label: '本',     unit: '冊', creator: '著者', done: '読み終えた月' },
   { id: 'movie', label: '映画',   unit: '本', creator: '監督', done: '観た月' },
+  { id: 'drama', label: 'ドラマ', unit: '作', creator: '脚本', done: '観た月' },
   { id: 'anime', label: 'アニメ', unit: '作', creator: '制作', done: '観た月' }
 ];
+
+/** お気に入りは種類ごとに5つまで。 */
+const FAVORITE_MAX = 5;
 
 const KIND = {};
 KINDS.forEach((k) => { KIND[k.id] = k; });
@@ -576,6 +580,7 @@ function renderAll() {
   $('btn-see-all').classList.toggle('hidden', S.entries.length === 0);
 
   renderBoardTile();
+  renderFavorites();
   renderNow();
   renderCounts();
   renderRecent();
@@ -631,6 +636,44 @@ function renderNow() {
   });
 }
 
+/**
+ * お気に入りのつけ外し。
+ * 5つを超えると断られるので、その場で理由を出す。
+ */
+async function toggleFavorite(entryId) {
+  const e = S.entries.find((x) => x.entryId === entryId);
+  if (!e) return;
+  const next = !e.favorite;
+
+  try {
+    await authed('setFavorite', { shelfId: S.shelf.shelfId, entryId, favorite: next });
+    e.favorite = next;
+    renderAll();
+    toast(next ? 'お気に入りに入れました' : 'お気に入りから外しました');
+  } catch (err) { toast(err.message); }
+}
+
+/** お気に入りのタイル。種類ごとに、選んだものを並べる。 */
+function renderFavorites() {
+  const groups = KINDS
+    .map((k) => ({ k, list: S.entries.filter((e) => e.kind === k.id && e.favorite) }))
+    .filter((g) => g.list.length);
+
+  const box = $('ui-fav-body');
+  if (!groups.length) {
+    box.innerHTML = `<p class="board-lede">
+      記録の横の♡を押すと、ここに並びます。種類ごとに${FAVORITE_MAX}つまで。
+    </p>`;
+    return;
+  }
+
+  box.innerHTML = groups.map((g) => `
+    <div class="fav-group">
+      <p class="eyebrow">${esc(g.k.label)} ${g.list.length}/${FAVORITE_MAX}</p>
+      <ul class="rec-list">${g.list.map((e) => entryRow(e, true)).join('')}</ul>
+    </div>`).join('');
+}
+
 /** 数のタイルを押したときの絞り込み。同じものを押すと解除。 */
 function toggleNowKind(kind) {
   nowKind = (nowKind === kind) ? 'all' : kind;
@@ -673,6 +716,10 @@ function entryRow(e, withMonth) {
       ${meta ? `<span class="rec-meta">${esc(meta)}</span>` : ''}
       ${e.note ? `<span class="rec-note">${esc(e.note)}</span>` : ''}
     </span>
+    ${S.canWrite && mine
+      ? `<button class="row-fav${e.favorite ? ' is-on' : ''}" data-fav="${esc(e.entryId)}"
+           aria-label="お気に入り" title="お気に入り">${e.favorite ? '♥' : '♡'}</button>`
+      : (e.favorite ? '<span class="row-fav is-on" aria-hidden="true">♥</span>' : '')}
     ${e.rating ? `<span class="stars">${stars(e.rating)}</span>` : ''}
     ${S.canEdit && S.members.length > 1
       ? `<button class="row-talk" data-talk='${esc(JSON.stringify({ type: 'entry', id: e.entryId, kind: e.kind, title: e.title, creator: e.creator }))}'>コメント</button>`
@@ -1079,7 +1126,8 @@ function filteredEntries() {
   const q = allQuery.trim().toLowerCase();
   let list = S.entries.slice();
 
-  if (allKind !== 'all') list = list.filter((e) => e.kind === allKind);
+  if (allKind === 'fav') list = list.filter((e) => e.favorite);
+  else if (allKind !== 'all') list = list.filter((e) => e.kind === allKind);
   if (allWho !== 'all') list = list.filter((e) => e.userId === allWho);
   if (q) {
     list = list.filter((e) =>
@@ -1801,6 +1849,9 @@ function wireUp() {
       else showView('home');
       return;
     }
+
+    const favBtn = ev.target.closest('[data-fav]');
+    if (favBtn) { toggleFavorite(favBtn.dataset.fav); return; }
 
     const kickBtn = ev.target.closest('[data-kick]');
     if (kickBtn) {
