@@ -670,7 +670,12 @@ function renderFavorites() {
   box.innerHTML = groups.map((g) => `
     <div class="fav-group">
       <p class="eyebrow">${esc(g.k.label)} ${g.list.length}/${FAVORITE_MAX}</p>
-      <ul class="rec-list">${g.list.map((e) => entryRow(e, true)).join('')}</ul>
+      <ul class="fav-list">
+        ${g.list.map(favRow).join('')}
+        ${g.list.length < FAVORITE_MAX
+          ? `<li class="fav-slot"><i></i><span>あと${FAVORITE_MAX - g.list.length}つ入ります</span></li>`
+          : ''}
+      </ul>
     </div>`).join('');
 }
 
@@ -700,6 +705,12 @@ function renderRecent() {
     : '<li class="rec-row"><span class="rec-meta">まだ記録がありません。</span></li>';
 }
 
+/**
+ * 記録の1行。
+ * 題名と感想は横幅をいっぱいに使い、
+ * 星や操作は感想の下に小さくまとめる。
+ * こうしないと題名が細く折り返され、1画面に数件しか入らない。
+ */
 function entryRow(e, withMonth) {
   const mine = S.user && e.userId === S.user.userId;
   const who = S.members.length > 1 ? e.byName : '';
@@ -709,22 +720,40 @@ function entryRow(e, withMonth) {
     who
   ].filter(Boolean).join(' ・ ');
 
-  return `<li class="rec-row">
-    <span class="kind-chip is-${esc(e.kind)}">${esc(kindOf(e.kind).label)}</span>
-    <span class="rec-body">
-      <span class="rec-title">${esc(e.title)}</span>
-      ${meta ? `<span class="rec-meta">${esc(meta)}</span>` : ''}
-      ${e.note ? `<span class="rec-note">${esc(e.note)}</span>` : ''}
-    </span>
-    ${S.canWrite && mine
+  const tools = [
+    e.rating ? `<span class="stars">${stars(e.rating)}</span>` : '',
+    S.canWrite && mine
       ? `<button class="row-fav${e.favorite ? ' is-on' : ''}" data-fav="${esc(e.entryId)}"
            aria-label="お気に入り" title="お気に入り">${e.favorite ? '♥' : '♡'}</button>`
-      : (e.favorite ? '<span class="row-fav is-on" aria-hidden="true">♥</span>' : '')}
-    ${e.rating ? `<span class="stars">${stars(e.rating)}</span>` : ''}
-    ${S.canEdit && S.members.length > 1
+      : (e.favorite ? '<span class="row-fav is-on" aria-hidden="true">♥</span>' : ''),
+    '<span class="row-gap"></span>',
+    S.canEdit && S.members.length > 1
       ? `<button class="row-talk" data-talk='${esc(JSON.stringify({ type: 'entry', id: e.entryId, kind: e.kind, title: e.title, creator: e.creator }))}'>コメント</button>`
+      : '',
+    S.canWrite && mine ? `<button class="row-edit" data-edit="${esc(e.entryId)}">直す</button>` : ''
+  ].filter(Boolean).join('');
+
+  return `<li class="rec-row">
+    <span class="rec-head">
+      <span class="kind-chip is-${esc(e.kind)}">${esc(kindOf(e.kind).label)}</span>
+      <span class="rec-title">${esc(e.title)}</span>
+    </span>
+    ${meta ? `<span class="rec-meta">${esc(meta)}</span>` : ''}
+    ${e.note ? `<span class="rec-note">${esc(e.note)}</span>` : ''}
+    <span class="rec-tools">${tools}</span>
+  </li>`;
+}
+
+/** お気に入り用の1行。作品名と作者だけ。 */
+function favRow(e) {
+  const mine = S.user && e.userId === S.user.userId;
+  return `<li class="fav-row is-${esc(e.kind)}">
+    <span class="fav-mark" aria-hidden="true"></span>
+    <span class="fav-title">${esc(e.title)}</span>
+    ${e.creator ? `<span class="fav-creator">${esc(e.creator)}</span>` : ''}
+    ${S.canWrite && mine
+      ? `<button class="row-fav is-on" data-fav="${esc(e.entryId)}" aria-label="お気に入りから外す">♥</button>`
       : ''}
-    ${S.canWrite && mine ? `<button class="row-edit" data-edit="${esc(e.entryId)}">直す</button>` : ''}
   </li>`;
 }
 
