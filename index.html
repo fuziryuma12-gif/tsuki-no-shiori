@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=14">
+<link rel="stylesheet" href="styles.css?v=15">
 <script>
   // CSSより先に色を決めておく。あとから当てると一瞬ちらつくため。
   (function () {
@@ -167,6 +167,11 @@
           <span class="stat-num" id="ui-movie-count">0<span>本</span></span>
           <span class="stat-label">映画</span>
         </button>
+        <button class="stat-cell" data-kind="drama">
+          <p class="eyebrow">Drama</p>
+          <span class="stat-num" id="ui-drama-count">0<span>作</span></span>
+          <span class="stat-label">ドラマ</span>
+        </button>
         <button class="stat-cell" data-kind="anime">
           <p class="eyebrow">Anime</p>
           <span class="stat-num" id="ui-anime-count">0<span>作</span></span>
@@ -192,6 +197,12 @@
       <button class="btn btn-quiet btn-block" id="btn-see-all" style="margin-top:14px">
         すべて見る
       </button>
+    </section>
+
+    <section class="tile tile-fav tile-wide">
+      <p class="eyebrow">Favorites</p>
+      <h3 class="tile-title">お気に入り</h3>
+      <div id="ui-fav-body"></div>
     </section>
 
     <section class="tile tile-board">
@@ -266,7 +277,9 @@
         <button class="chip is-on" data-kind="all">すべて</button>
         <button class="chip" data-kind="book">本</button>
         <button class="chip" data-kind="movie">映画</button>
+        <button class="chip" data-kind="drama">ドラマ</button>
         <button class="chip" data-kind="anime">アニメ</button>
+        <button class="chip" data-kind="fav">♥ お気に入り</button>
       </div>
       <div class="chips" id="filter-who" style="margin-top:8px"></div>
       <div class="chips" id="filter-sort" style="margin-top:8px">
@@ -427,9 +440,10 @@
 
     <div class="field">
       <label>種類</label>
-      <div class="seg" id="seg-kind">
+      <div class="seg seg-wrap" id="seg-kind">
         <button type="button" data-kind="book" class="is-on">本</button>
         <button type="button" data-kind="movie">映画</button>
+        <button type="button" data-kind="drama">ドラマ</button>
         <button type="button" data-kind="anime">アニメ</button>
       </div>
     </div>
@@ -520,6 +534,7 @@
         <button type="button" data-aikind="both" class="is-on">ぜんぶ</button>
         <button type="button" data-aikind="book">本</button>
         <button type="button" data-aikind="movie">映画</button>
+        <button type="button" data-aikind="drama">ドラマ</button>
         <button type="button" data-aikind="anime">アニメ</button>
       </div>
     </div>
@@ -560,6 +575,6 @@
   </div>
 </div>
 
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
