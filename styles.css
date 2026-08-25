@@ -46,6 +46,7 @@ html { touch-action: manipulation; }
 body {
   background: var(--blush);
   color: var(--ink);
+  text-align: left;
   font-family: var(--body);
   font-size: 15px;
   line-height: 1.75;
@@ -54,7 +55,9 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-button { font: inherit; color: inherit; cursor: pointer; }
+/* ボタンは既定で中央寄せになるので、左寄せに揃える。
+   中央にしたいものだけ後で上書きする。 */
+button { font: inherit; color: inherit; cursor: pointer; text-align: left; }
 input, select, textarea { font: inherit; color: inherit; }
 
 :focus-visible {
@@ -226,6 +229,7 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 
 .icon-btn {
+  text-align: center;
   flex: none;
   width: 38px;
   height: 38px;
@@ -379,6 +383,7 @@ input, select, textarea { font: inherit; color: inherit; }
 /* 題名と感想が横幅をいっぱいに使えるよう、縦に積む */
 .rec-row {
   display: block;
+  text-align: left;
   padding: 12px 0;
   border-bottom: 1px solid var(--blush-deep);
 }
@@ -541,6 +546,7 @@ input, select, textarea { font: inherit; color: inherit; }
    ========================================================== */
 
 .btn {
+  text-align: center;
   border: none;
   border-radius: 30px;
   padding: 12px 20px;
@@ -616,6 +622,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .seg { display: flex; gap: 7px; }
 
 .seg button {
+  text-align: center;
   flex: 1;
   border: 1px solid var(--blush-deep);
   background: var(--paper-warm);
@@ -634,6 +641,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .rate { display: flex; gap: 3px; }
 
 .rate button {
+  text-align: center;
   border: none;
   background: none;
   padding: 3px 5px;
@@ -668,6 +676,7 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 
 .dock button {
+  text-align: center;
   flex: 1;
   position: relative;
   white-space: nowrap;
@@ -928,8 +937,8 @@ input, select, textarea { font: inherit; color: inherit; }
 .blank {
   background: var(--paper);
   border-radius: var(--r-lg);
-  padding: 40px 24px;
-  text-align: center;
+  padding: 32px 22px;
+  text-align: left;
   box-shadow: var(--shadow-soft);
 }
 
@@ -1089,8 +1098,8 @@ input, select, textarea { font: inherit; color: inherit; }
 .chat-empty {
   background: var(--paper);
   border-radius: var(--r-lg);
-  padding: 34px 24px;
-  text-align: center;
+  padding: 28px 22px;
+  text-align: left;
   box-shadow: var(--shadow-soft);
   font-size: 13px;
   color: var(--mist);
@@ -1234,6 +1243,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .chip {
+  text-align: center;
   border: 1px solid var(--blush-deep);
   background: var(--paper-warm);
   border-radius: 30px;
@@ -1260,8 +1270,8 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 
 .all-empty {
-  padding: 30px 10px;
-  text-align: center;
+  padding: 26px 4px;
+  text-align: left;
   font-size: 13px;
   color: var(--mist);
   line-height: 1.9;
@@ -1293,6 +1303,7 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 
 .member-kick {
+  text-align: center;
   flex: none;
   border: 1px solid var(--petal);
   background: none;
@@ -1407,6 +1418,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .role-seg { display: flex; gap: 4px; flex: none; }
 
 .role-seg button {
+  text-align: center;
   border: 1px solid var(--blush-deep);
   background: var(--paper-warm);
   border-radius: 30px;
@@ -1569,7 +1581,6 @@ input, select, textarea { font: inherit; color: inherit; }
 .rec-note {
   font-size: 11.5px;
   color: var(--mist);
-  text-align: center;
   letter-spacing: .04em;
   margin: 4px 0 0;
 }
@@ -1636,6 +1647,7 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 
 .theme-card {
+  text-align: center;
   border: 2px solid var(--blush-deep);
   background: var(--paper-warm);
   border-radius: var(--r-md);
@@ -1725,7 +1737,6 @@ input, select, textarea { font: inherit; color: inherit; }
   font-size: 11px;
   color: var(--mist);
   letter-spacing: .04em;
-  text-align: center;
 }
 
 /* ============================================================
@@ -1761,81 +1772,159 @@ input, select, textarea { font: inherit; color: inherit; }
 
 
 /* ============================================================
-   お気に入り（1行だけ・本棚のように並べる）
+   お気に入りの棚
+   ============================================================
+   背表紙を立てて棚板に並べる。色は既存のものだけを使い、
+   形と配置だけで本棚に見せる。
+   題名は writing-mode で縦に流す（日本語は縦書きが自然）。
    ========================================================== */
 
-.fav-list {
+.fav-group { margin-bottom: 20px; }
+.fav-group:last-child { margin-bottom: 0; }
+.fav-group > .eyebrow { margin-bottom: 8px; }
+
+.shelf { position: relative; }
+
+.shelf-row {
   list-style: none;
-  margin: 7px 0 0;
-  padding: 0 0 6px;
-  /* 棚板。背表紙がこの上に立っているように見せる */
-  border-bottom: 4px solid var(--blush-deep);
-  border-radius: 0 0 4px 4px;
-  box-shadow: 0 5px 0 -2px var(--paper-warm);
-}
-
-.fav-row {
+  margin: 0;
+  padding: 0 2px;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 8px 8px 0;
+  align-items: flex-end;   /* 背の高さが違っても棚板に立つ */
+  gap: 4px;
+  min-height: 172px;
 }
 
-/* 背表紙。種類ごとに色を変えて、棚に並んでいるように見せる */
-.fav-mark {
+/* --- 背表紙 --- */
+/* 背表紙そのものを縦書きにする。
+   中に縦書きの子を入れて flex で積むと、
+   題名の欄が潰れて読めなくなるので避けている。 */
+
+.fav-spine {
+  position: relative;
   flex: none;
-  width: 6px;
-  height: 22px;
-  border-radius: 1px;
+  /* 1文字ずつ縦に積む。列が増えるときは右から左へ（日本語の縦組みと同じ） */
+  display: flex;
+  flex-flow: column wrap-reverse;
+  align-content: flex-start;
+  justify-content: flex-start;
+  padding: 14px 4px 11px;
+  border-radius: 3px 3px 1px 1px;
   background: var(--rouge);
-  box-shadow: 1px 0 0 rgba(255, 255, 255, .6);
-}
-
-.fav-row.is-movie .fav-mark { background: var(--petal); }
-.fav-row.is-drama .fav-mark { background: var(--rouge-deep); }
-.fav-row.is-anime .fav-mark { background: var(--blush-deep); }
-
-.fav-title {
-  flex: 0 1 auto;
-  min-width: 0;
+  color: var(--paper);
   font-family: var(--display);
-  font-size: 14.5px;
+  font-size: 12.5px;
   font-weight: 600;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.fav-creator {
-  flex: 1;
-  min-width: 0;
-  font-size: 11px;
-  color: var(--mist);
-  letter-spacing: .02em;
+  line-height: 1;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  cursor: pointer;
+  transition: transform .18s cubic-bezier(.2, .8, .3, 1);
+  box-shadow:
+    inset -2px 0 0 rgba(0, 0, 0, .12),
+    inset 2px 0 0 rgba(255, 255, 255, .28),
+    1px 2px 4px -3px rgba(51, 35, 42, .45);
 }
 
-.fav-row .row-fav { font-size: 13px; }
+/* 少し抜き出す動き。棚から取り出す感じ */
+.fav-spine:hover { transform: translateY(-4px); }
+.fav-spine:active { transform: translateY(-1px); }
 
-/* 空きが1つでもあることを、薄い背表紙で示す */
-.fav-slot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 8px 8px 0;
-}
-
-.fav-slot i {
+/* 1文字ぶんの升。高さを固定しておけば、フォントに左右されない */
+.fav-spine i {
+  display: block;
+  width: 15px;
+  height: 15px;
+  font-style: normal;
+  text-align: center;
   flex: none;
-  width: 6px;
-  height: 22px;
-  border-radius: 1px;
+}
+
+/* 英数字のまとまりは横倒しにする（SPY×FAMILY などが読めるように）。
+   升の大きさは固定し、中の文字だけを回すのではみ出さない。 */
+.fav-spine .sp-lat {
+  width: 15px;
+  height: 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.fav-spine .sp-lat span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(90deg);
+  white-space: nowrap;
+  font-size: 11.5px;
+  line-height: 1;
+  letter-spacing: .01em;
+}
+
+.fav-spine .sp-gap { height: 7px; }
+
+/* 天の部分に紙の縞を入れる */
+.fav-spine::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, .5) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+/* 厚み。1列15px＋左右の余白。長い題名は2〜3列になる */
+.fav-spine.is-thin  { width: 24px; }   /* 1列 */
+.fav-spine.is-mid   { width: 39px; }   /* 2列 */
+.fav-spine.is-thick { width: 54px; }   /* 3列 */
+
+/* 背の高さ。1列に入る文字数が変わる */
+.fav-spine.is-h1 { height: 160px; }    /* 9文字 */
+.fav-spine.is-h2 { height: 175px; }    /* 10文字 */
+.fav-spine.is-h3 { height: 145px; }    /* 8文字 */
+
+/* 種類ごとの背表紙の色。既存の変数だけを使う */
+.fav-spine.is-movie { background: var(--petal); color: var(--rouge-deep); }
+.fav-spine.is-drama { background: var(--rouge-deep); }
+.fav-spine.is-anime { background: var(--blush-deep); color: var(--rouge-deep); }
+
+/* 空き枠。うっすら場所だけ残す */
+.fav-spine.is-empty {
+  width: 22px;
+  height: 96px;
+  background: none;
+  color: transparent;
+  border-left: 1px dashed var(--blush-deep);
+  border-right: 1px dashed var(--blush-deep);
+  border-top: 1px dashed var(--blush-deep);
+  border-radius: 2px 2px 0 0;
+  box-shadow: none;
+  cursor: default;
+  opacity: .6;
+}
+
+.fav-spine.is-empty::after { display: none; }
+.fav-spine.is-empty:hover { transform: none; }
+
+/* --- 棚板 --- */
+
+.shelf-plank {
+  height: 7px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--blush-deep) 0%, var(--petal) 100%);
+  box-shadow: 0 3px 6px -4px rgba(51, 35, 42, .45);
+}
+
+.shelf-plank::after {
+  content: "";
+  display: block;
+  height: 3px;
+  margin: 7px 5px 0;
+  border-radius: 2px;
   background: var(--blush);
 }
 
-.fav-slot span {
-  font-size: 11.5px;
-  color: var(--mist);
-  letter-spacing: .04em;
+@media (prefers-reduced-motion: reduce) {
+  .fav-spine:hover, .fav-spine:active { transform: none; }
 }
