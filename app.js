@@ -662,21 +662,30 @@ function renderFavorites() {
   const box = $('ui-fav-body');
   if (!groups.length) {
     box.innerHTML = `<p class="board-lede">
-      記録の横の♡を押すと、ここに並びます。種類ごとに${FAVORITE_MAX}つまで。
-    </p>`;
+      記録の横の♡を押すと、この棚に並びます。種類ごとに${FAVORITE_MAX}冊まで。
+    </p>
+    <div class="shelf">
+      <ul class="shelf-row">
+        ${Array.from({ length: FAVORITE_MAX }, () => '<li class="fav-spine is-empty"></li>').join('')}
+      </ul>
+      <div class="shelf-plank" aria-hidden="true"></div>
+    </div>`;
     return;
   }
 
-  box.innerHTML = groups.map((g) => `
-    <div class="fav-group">
+  box.innerHTML = groups.map((g) => {
+    const empties = FAVORITE_MAX - g.list.length;
+    return `<div class="fav-group">
       <p class="eyebrow">${esc(g.k.label)} ${g.list.length}/${FAVORITE_MAX}</p>
-      <ul class="fav-list">
-        ${g.list.map(favRow).join('')}
-        ${g.list.length < FAVORITE_MAX
-          ? `<li class="fav-slot"><i></i><span>あと${FAVORITE_MAX - g.list.length}つ入ります</span></li>`
-          : ''}
-      </ul>
-    </div>`).join('');
+      <div class="shelf">
+        <ul class="shelf-row">
+          ${g.list.map(favSpine).join('')}
+          ${Array.from({ length: empties }, () => '<li class="fav-spine is-empty"></li>').join('')}
+        </ul>
+        <div class="shelf-plank" aria-hidden="true"></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 /** 数のタイルを押したときの絞り込み。同じものを押すと解除。 */
@@ -744,17 +753,49 @@ function entryRow(e, withMonth) {
   </li>`;
 }
 
-/** お気に入り用の1行。作品名と作者だけ。 */
-function favRow(e) {
+/**
+ * お気に入りの1冊を、棚に立てた背表紙として描く。
+ * 日本語は縦書きが自然なので、題名は writing-mode で縦に流す。
+ * 厚みは題名の長さで少し変える（同じ幅が並ぶと機械的に見えるため）。
+ */
+function favSpine(e) {
   const mine = S.user && e.userId === S.user.userId;
-  return `<li class="fav-row is-${esc(e.kind)}">
-    <span class="fav-mark" aria-hidden="true"></span>
-    <span class="fav-title">${esc(e.title)}</span>
-    ${e.creator ? `<span class="fav-creator">${esc(e.creator)}</span>` : ''}
-    ${S.canWrite && mine
-      ? `<button class="row-fav is-on" data-fav="${esc(e.entryId)}" aria-label="お気に入りから外す">♥</button>`
-      : ''}
-  </li>`;
+  const len = e.title.length;
+
+  // 1列に入るのは8〜10文字。溢れる分だけ背を厚くする
+  const thick = len > 18 ? 'is-thick' : len > 9 ? 'is-mid' : 'is-thin';
+  // 背の高さを少し散らす。並びが単調にならないように
+  const tall = len > 9 ? 'is-h2' : ['is-h1', 'is-h2', 'is-h3'][len % 3];
+
+  const label = e.creator ? `${e.title} / ${e.creator}` : e.title;
+
+  return `<li class="fav-spine is-${esc(e.kind)} ${thick} ${tall}"
+      title="${esc(label)}"
+      ${S.canWrite && mine ? `data-fav="${esc(e.entryId)}" role="button" tabindex="0"
+        aria-label="${esc(label)} をお気に入りから外す"` : ''}
+    >${spineText(e.title)}</li>`;
+}
+
+/**
+ * 背表紙用に題名を縦に組む。
+ * CSS の writing-mode に任せると、フォントによって縦の文字送りが
+ * 0 になり文字が重なることがある（実測で確認）。
+ * そこで1文字ずつ行に分け、英数字の連なりだけまとめて横倒しにする。
+ */
+function spineText(title) {
+  const tokens = String(title).match(/[A-Za-z0-9][A-Za-z0-9.,:'"!?&×\/\-]*|\s+|[\s\S]/g) || [];
+  return tokens.map((t) => {
+    if (/^\s+$/.test(t)) return '<i class="sp-gap"></i>';
+    if (/^[A-Za-z0-9]/.test(t)) {
+      // 横倒しにすると背からはみ出すので、長い英数字は
+      // 4文字ずつに折って升に収める
+      // 升の高さに入る長さ（4文字ほど）で折る
+      return t.match(/.{1,4}/g)
+        .map((part) => `<i class="sp-lat"><span>${esc(part)}</span></i>`)
+        .join('');
+    }
+    return `<i>${esc(t)}</i>`;
+  }).join('');
 }
 
 function renderMembers() {
