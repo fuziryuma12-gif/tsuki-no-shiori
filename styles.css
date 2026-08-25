@@ -265,6 +265,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .tile-wide,
 .tile-recent,
 .tile-board,
+.tile-fav,
 .tile-share,
 .tile-months { grid-column: span 2; }
 
@@ -943,6 +944,7 @@ input, select, textarea { font: inherit; color: inherit; }
   .tile-now { grid-column: span 2; grid-row: span 2; }
   .tile-ai { grid-column: span 2; }
   .tile-recent { grid-column: span 2; }
+  .tile-fav { grid-column: span 2; }
   #readonly-note { grid-column: span 4; }
   .tile-board { grid-column: span 1; align-self: start; }
   .tile-share { grid-column: span 1; align-self: start; }
@@ -1708,3 +1710,34 @@ input, select, textarea { font: inherit; color: inherit; }
   letter-spacing: .04em;
   text-align: center;
 }
+
+/* ============================================================
+   お気に入り
+   ========================================================== */
+
+.row-fav {
+  flex: none;
+  border: none;
+  background: none;
+  padding: 2px 5px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--blush-deep);
+  transition: color .16s ease, transform .16s ease;
+}
+
+.row-fav:hover { color: var(--petal); }
+.row-fav:active { transform: scale(1.25); }
+.row-fav.is-on { color: var(--rouge); }
+
+.fav-group { margin-bottom: 16px; }
+.fav-group:last-child { margin-bottom: 0; }
+.fav-group > .eyebrow { margin-bottom: 2px; }
+.fav-group .rec-row:first-child { padding-top: 6px; }
+
+/* 数のタイルが4つになったので詰める */
+.stat-cell { padding: 9px 4px 8px; }
+.stat-cell .stat-num { font-size: 26px; }
+.stat-cell .stat-num span { font-size: 11px; }
+.stat-cell .eyebrow { font-size: 9px; letter-spacing: .12em; }
+.stat-cell .stat-label { font-size: 10.5px; }
