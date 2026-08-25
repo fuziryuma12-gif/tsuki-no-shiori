@@ -894,7 +894,7 @@ function renderRecs() {
   body.innerHTML = `
     ${askBtn ? `<div class="rec-ask">${askBtn}</div>` : ''}
     ${list}
-    ${S.recs.length > 1 ? '<p class="rec-note">これまでのおすすめは5回分まで残ります。</p>' : ''}
+    ${S.recs.length > 1 ? '<p class="rec-hint">これまでのおすすめは5回分まで残ります。</p>' : ''}
   `;
 
   const b = $('btn-ask-again');
