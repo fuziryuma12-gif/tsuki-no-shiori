@@ -47,6 +47,7 @@ body {
   background: var(--blush);
   color: var(--ink);
   text-align: left;
+  position: relative;
   font-family: var(--body);
   font-size: 15px;
   line-height: 1.75;
@@ -71,6 +72,74 @@ input, select, textarea { font: inherit; color: inherit; }
   max-width: 940px;
   margin: 0 auto;
   padding: 22px 16px 96px;
+}
+
+/* ============================================================
+   背景 — 本棚の気配
+   ============================================================
+   実際の本は描かず、棚板と側板の線だけを薄く敷く。
+   カードが棚に並んでいるように見えればよい。
+   固定なので、めくっても棚が波打たない。
+   色はテーマの変数だけを使うので、6色すべてに馴染む。
+   ========================================================== */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--blush);
+  background-image:
+    /* 棚板の下に落ちる影 */
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 200px,
+      rgba(90, 55, 70, .10) 200px 209px,
+      transparent 209px 232px
+    ),
+    /* 棚板。上に明るい縁、下に厚み */
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 192px,
+      rgba(255, 255, 255, .55) 192px 194px,
+      var(--petal) 194px 200px,
+      transparent 200px 232px
+    ),
+    /* 側板（本棚の枠）。左右の柱 */
+    linear-gradient(90deg,
+      var(--petal) 0 11px,
+      rgba(255, 255, 255, .5) 11px 13px,
+      transparent 13px),
+    linear-gradient(270deg,
+      var(--petal) 0 11px,
+      rgba(255, 255, 255, .5) 11px 13px,
+      transparent 13px),
+    /* ごく薄い木目 */
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, .18) 0 2px,
+      transparent 2px 9px
+    );
+}
+
+/* 画面が広いときは棚の間隔も広げる */
+@media (min-width: 720px) {
+  body::before {
+    background-image:
+      repeating-linear-gradient(180deg, transparent 0 262px, rgba(90, 55, 70, .10) 262px 271px, transparent 271px 300px),
+      repeating-linear-gradient(180deg, transparent 0 254px, rgba(255,255,255,.55) 254px 256px, var(--petal) 256px 262px, transparent 262px 300px),
+      linear-gradient(90deg, var(--petal) 0 15px, rgba(255,255,255,.5) 15px 17px, transparent 17px),
+      linear-gradient(270deg, var(--petal) 0 15px, rgba(255,255,255,.5) 15px 17px, transparent 17px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.18) 0 2px, transparent 2px 9px);
+  }
+}
+
+/* 棚の上に置かれているように、カードの影を少し落とす */
+.tile, .shelf-card, .sug, .gate-card, .install-hint, .readonly-note {
+  box-shadow:
+    0 1px 2px rgba(90, 55, 70, .06),
+    0 10px 20px -12px rgba(90, 55, 70, .28);
 }
 
 /* ---------- 見出しの型 ---------- */
@@ -437,14 +506,17 @@ input, select, textarea { font: inherit; color: inherit; }
 .rec-meta {
   display: block;
   font-size: 11.5px;
-  color: var(--mist);
+  color: var(--ink);
+  opacity: .58;
   letter-spacing: .02em;
 }
 
 .rec-note {
   display: block;
   font-size: 12.5px;
-  color: var(--rouge-deep);
+  /* 小さい字なので、差し色ではなく本文の色に寄せて読みやすくする */
+  color: var(--ink);
+  opacity: .82;
   margin-top: 5px;
   line-height: 1.75;
   overflow-wrap: anywhere;
@@ -1578,7 +1650,9 @@ input, select, textarea { font: inherit; color: inherit; }
 
 .rec-past[open] { padding-bottom: 18px; }
 
-.rec-note {
+/* おすすめ画面の下に出る注記。
+   記録の感想（.rec-note）と名前が衝突していたので分けた。 */
+.rec-hint {
   font-size: 11.5px;
   color: var(--mist);
   letter-spacing: .04em;
